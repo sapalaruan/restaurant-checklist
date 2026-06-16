@@ -1,0 +1,2533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Opening Small Checklist</title>
+<link rel="manifest" href="data:application/json,{}">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Space+Mono:wght@400;700&display=swap');
+
+:root{
+  --paper:#FAF6ED;
+  --paper-deep:#F1EADA;
+  --ink:#2B2724;
+  --ink-soft:#6E6457;
+  --line:#D8CFBE;
+  --very-high:#C1432E;
+  --high:#E0883B;
+  --medium:#C99A2E;
+  --low:#5B8A72;
+  --done:#4F7A5C;
+  --paper-radius:6px;
+}
+
+*{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
+html,body{margin:0; padding:0;}
+body{
+  font-family:'Space Mono', monospace;
+  background: var(--paper-deep);
+  color:var(--ink);
+  min-height:100vh;
+  display:flex;
+  justify-content:center;
+}
+
+#app{
+  width:100%;
+  max-width:520px;
+  min-height:100vh;
+  background:var(--paper);
+  position:relative;
+  display:flex;
+  flex-direction:column;
+}
+
+/* ---------- Header / Ticket look ---------- */
+.ticket-head{
+  position:relative;
+  padding:22px 20px 16px;
+  border-bottom:2px dashed var(--line);
+  background:
+    radial-gradient(circle at 8px 0, transparent 7px, var(--paper) 7px) top left,
+    radial-gradient(circle at calc(100% - 8px) 0, transparent 7px, var(--paper) 7px) top right;
+}
+.brand{
+  font-family:'Oswald', sans-serif;
+  font-weight:700;
+  font-size:13px;
+  letter-spacing:.28em;
+  color:var(--ink-soft);
+  text-transform:uppercase;
+}
+.title{
+  font-family:'Oswald', sans-serif;
+  font-weight:700;
+  font-size:26px;
+  letter-spacing:.02em;
+  margin:4px 0 2px;
+  text-transform:uppercase;
+}
+.subtitle{
+  font-size:11px;
+  color:var(--ink-soft);
+  display:flex;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  gap:6px;
+  margin-top:8px;
+}
+.subtitle span b{color:var(--ink);}
+
+/* ---------- Generic layout ---------- */
+.screen{flex:1; display:flex; flex-direction:column; padding:18px 18px 100px;}
+.screen.hidden{display:none;}
+
+.field-label{
+  font-family:'Oswald', sans-serif;
+  font-size:11px;
+  font-weight:600;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  color:var(--ink-soft);
+  margin-bottom:8px;
+}
+select, input[type=text], input[type=password], input[type=number], input[type=time]{
+  width:100%;
+  font-family:'Space Mono', monospace;
+  font-size:14px;
+  padding:11px 12px;
+  border:2px solid var(--ink);
+  border-radius:var(--paper-radius);
+  background:var(--paper);
+  color:var(--ink);
+  margin-bottom:14px;
+}
+select:focus, input:focus{outline:3px solid var(--medium); outline-offset:1px;}
+
+button{
+  font-family:'Oswald', sans-serif;
+  font-weight:600;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  font-size:13px;
+  border-radius:var(--paper-radius);
+  border:2px solid var(--ink);
+  padding:13px 16px;
+  cursor:pointer;
+  background:var(--paper);
+  color:var(--ink);
+  transition:transform .08s ease;
+}
+button:active{transform:scale(.97);}
+.btn-primary{background:var(--ink); color:var(--paper);}
+.btn-block{width:100%;}
+.btn-row{display:flex; gap:10px;}
+.btn-row button{flex:1;}
+.btn-ghost{background:transparent; border:2px dashed var(--line); color:var(--ink-soft);}
+.btn-whatsapp{background:#1F8A4C; border-color:#1F8A4C; color:#fff;}
+.btn-danger{background:var(--very-high); border-color:var(--very-high); color:#fff;}
+.btn-small{padding:8px 10px; font-size:11px;}
+.btn-wa{background:#1F8A4C;border-color:#1F8A4C;color:#fff;}
+.hint{font-size:11px;color:var(--ink-soft);line-height:1.5;margin-top:6px;}
+.msg{font-size:12px;margin:8px 0;}
+
+/* ---------- Login ---------- */
+.login-wrap{display:flex; flex-direction:column; gap:6px; padding-top:18px;}
+.login-stamp{
+  align-self:center;
+  width:88px; height:88px;
+  border:3px solid var(--very-high);
+  border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  transform:rotate(-8deg);
+  color:var(--very-high);
+  font-family:'Oswald', sans-serif;
+  font-weight:700;
+  font-size:11px;
+  letter-spacing:.15em;
+  text-align:center;
+  text-transform:uppercase;
+  margin-bottom:18px;
+  line-height:1.3;
+}
+
+.toggle-row{display:flex; gap:8px; margin-bottom:18px;}
+.toggle-row button{flex:1; font-size:11px; padding:10px;}
+.toggle-row button.active{background:var(--ink); color:var(--paper);}
+
+/* ---------- Task list ---------- */
+.progress-bar{
+  height:8px; border-radius:5px; background:var(--paper-deep);
+  border:1px solid var(--line); overflow:hidden; margin:14px 0 4px;
+}
+.progress-fill{height:100%; background:var(--done); transition:width .3s ease;}
+.progress-label{font-size:11px; color:var(--ink-soft); display:flex; justify-content:space-between; margin-bottom:10px;}
+
+.task-card{
+  border:2px solid var(--ink);
+  border-radius:var(--paper-radius);
+  padding:12px;
+  margin-bottom:12px;
+  background:var(--paper);
+  position:relative;
+}
+.task-card.is-done{opacity:.55;}
+.task-card.is-pending{
+  border-color:var(--very-high);
+  background:#FBEFEC;
+}
+.task-top{display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:8px;}
+.task-text{font-size:13.5px; line-height:1.45; flex:1;}
+.task-meta{display:flex; flex-direction:column; align-items:flex-end; gap:4px; flex-shrink:0;}
+.tag{
+  font-family:'Oswald', sans-serif;
+  font-size:10px;
+  font-weight:600;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+  padding:3px 8px;
+  border-radius:20px;
+  color:#fff;
+  white-space:nowrap;
+}
+.tag.very-high{background:var(--very-high);}
+.tag.high{background:var(--high);}
+.tag.medium{background:var(--medium);}
+.tag.low{background:var(--low);}
+.deadline{font-size:10.5px; color:var(--ink-soft);}
+
+.pending-flag{
+  font-family:'Oswald', sans-serif;
+  font-size:10px; font-weight:700; letter-spacing:.12em;
+  color:var(--very-high); text-transform:uppercase;
+  margin-bottom:6px; display:flex; align-items:center; gap:6px;
+}
+.pending-flag::before{content:"⚠"; font-size:13px;}
+
+.status-row{display:flex; gap:8px;}
+.status-btn{
+  flex:1; padding:9px; font-size:11.5px;
+  border:2px solid var(--line); border-radius:var(--paper-radius);
+  background:var(--paper); color:var(--ink-soft);
+  font-family:'Oswald', sans-serif; font-weight:600; letter-spacing:.06em; text-transform:uppercase;
+  cursor:pointer;
+}
+.status-btn.done.active{background:var(--done); border-color:var(--done); color:#fff;}
+.status-btn.notdone.active{background:var(--very-high); border-color:var(--very-high); color:#fff;}
+
+.reason-box{margin-top:10px;}
+.reason-box input{margin-bottom:0; font-size:13px;}
+.reason-warn{font-size:10.5px; color:var(--very-high); margin-top:5px; display:none;}
+.reason-warn.show{display:block;}
+
+/* ---------- Sticky footer ---------- */
+.footer-bar{
+  position:fixed;
+  bottom:0; left:50%; transform:translateX(-50%);
+  width:100%; max-width:520px;
+  background:var(--paper);
+  border-top:2px dashed var(--line);
+  padding:12px 18px;
+  display:flex; gap:10px;
+}
+
+/* ---------- Summary screen ---------- */
+.summary-stamp{
+  text-align:center; padding:20px 0;
+}
+.summary-stamp .big{
+  font-family:'Oswald', sans-serif; font-weight:700; font-size:22px;
+  text-transform:uppercase; letter-spacing:.06em;
+}
+.summary-list{margin:14px 0;}
+.summary-item{
+  border-left:4px solid var(--very-high);
+  background:var(--paper-deep);
+  padding:10px 12px; border-radius:4px; margin-bottom:8px; font-size:13px;
+}
+.summary-item .r{color:var(--ink-soft); font-size:12px; margin-top:4px;}
+.empty-note{
+  text-align:center; color:var(--ink-soft); font-size:13px; padding:20px;
+  border:2px dashed var(--line); border-radius:var(--paper-radius);
+}
+
+/* ---------- Admin ---------- */
+.admin-task-row{
+  border:1px solid var(--line); border-radius:var(--paper-radius);
+  padding:10px; margin-bottom:8px; display:flex; flex-direction:column; gap:6px;
+}
+.admin-task-row .top{display:flex; justify-content:space-between; align-items:center; gap:8px;}
+.admin-task-row .top span:first-child{font-size:12.5px; flex:1;}
+.admin-actions{display:flex; gap:6px;}
+.section-title{
+  font-family:'Oswald', sans-serif; font-weight:700; font-size:15px;
+  text-transform:uppercase; letter-spacing:.1em; margin:18px 0 10px;
+  border-bottom:2px solid var(--ink); padding-bottom:6px;
+}
+.small-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+.nav-link{
+  font-size:11px; color:var(--ink-soft); text-decoration:underline;
+  cursor:pointer; display:inline-block; margin-top:4px;
+}
+.history-row{
+  font-size:11.5px; border-bottom:1px solid var(--line); padding:8px 0;
+}
+.history-row .hm{display:flex; justify-content:space-between; color:var(--ink-soft);}
+
+/* ---------- Done section ---------- */
+.done-toggle{
+  font-family:'Oswald', sans-serif; font-size:11px; font-weight:600; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--ink-soft); text-align:center;
+  padding:10px; border:2px dashed var(--line); border-radius:var(--paper-radius);
+  cursor:pointer; margin:10px 0;
+}
+.done-list{margin-bottom:10px;}
+.done-list.hidden{display:none;}
+.done-row{
+  display:flex; align-items:center; gap:8px; justify-content:space-between;
+  padding:8px 10px; border-radius:var(--paper-radius); background:var(--paper-deep);
+  border:1px solid var(--line); margin-bottom:6px; font-size:12px;
+}
+.done-row .dt{flex:1; text-decoration:line-through; color:var(--ink-soft);}
+.done-time{color:var(--done); font-size:10.5px; white-space:nowrap;}
+.reason-stamp{font-size:10.5px; color:var(--ink-soft); margin-top:5px;}
+.reason-submit{margin-top:10px; font-size:11.5px;}
+.reason-submit[disabled]{opacity:.4; cursor:not-allowed;}
+
+/* ---------- Checklist selector ---------- */
+.checklist-grid{display:flex; flex-direction:column; gap:12px; margin-top:6px;}
+.checklist-card{
+  border:2px solid var(--ink); border-radius:var(--paper-radius);
+  padding:16px; cursor:pointer; background:var(--paper);
+  display:flex; justify-content:space-between; align-items:center; gap:10px;
+  transition:transform .08s ease;
+}
+.checklist-card:active{transform:scale(.98);}
+.cc-left{display:flex; flex-direction:column; gap:5px; min-width:0;}
+.cc-title{font-family:'Oswald', sans-serif; font-weight:700; font-size:15px; text-transform:uppercase; letter-spacing:.03em;}
+.cc-sub{font-size:11px; color:var(--ink-soft);}
+.cc-badge{
+  font-family:'Oswald', sans-serif; font-size:10px; font-weight:700; letter-spacing:.1em;
+  text-transform:uppercase; padding:6px 10px; border-radius:20px; white-space:nowrap; flex-shrink:0;
+}
+.cc-badge.pending{background:var(--paper-deep); color:var(--ink-soft); border:1px solid var(--line);}
+.cc-badge.done{background:var(--done); color:#fff;}
+.cc-badge.flag{background:var(--very-high); color:#fff;}
+.status-badge{font-family:'Oswald',sans-serif;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:3px 9px;border-radius:20px;}
+.status-pending{background:var(--high);color:#fff;}
+.status-mgr{background:#5B8AAE;color:#fff;}
+.status-approved{background:var(--done);color:#fff;}
+.status-declined{background:var(--very-high);color:#fff;}
+
+/* ---------- Locked (already submitted) screen ---------- */
+.locked-box{
+  text-align:center; padding:34px 20px; border:2px dashed var(--line); border-radius:var(--paper-radius); margin-top:16px;
+}
+.locked-box .big{
+  font-family:'Oswald', sans-serif; font-weight:700; font-size:18px; text-transform:uppercase; letter-spacing:.05em;
+  color:var(--done); margin-bottom:8px;
+}
+
+.notdone-toggle{
+  font-family:'Oswald', sans-serif; font-size:11px; font-weight:700; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--very-high); text-align:center;
+  padding:10px; border:2px dashed var(--very-high); border-radius:var(--paper-radius);
+  cursor:pointer; margin:10px 0;
+}
+.notdone-list{margin-bottom:10px;}
+.notdone-list.hidden{display:none;}
+.notdone-row{
+  padding:10px 12px; border-radius:var(--paper-radius); background:#FBEFEC;
+  border:1px solid var(--very-high); margin-bottom:8px; font-size:12px;
+}
+.notdone-row .nr-top{display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-bottom:4px;}
+.notdone-row .nr-text{flex:1; font-weight:700;}
+.notdone-row .nr-reason{color:var(--ink-soft); margin-bottom:2px;}
+.notdone-row .nr-time{color:var(--very-high); font-size:10.5px;}
+
+/* ---------- Admin edit form ---------- */
+.admin-task-row.editing{border-color:var(--ink); background:var(--paper-deep); gap:10px;}
+.admin-task-row.editing input, .admin-task-row.editing select{margin-bottom:0;}
+.checkbox-label{font-size:12px; display:flex; align-items:center; gap:8px; padding:2px 0;}
+.checkbox-label input{width:auto; margin:0;}
+/* ===== UTILITIES MONITOR ===== */
+.util-tabs{display:flex;border:2px solid var(--ink);border-radius:var(--paper-radius);overflow:hidden;margin-bottom:16px;}
+.util-tabs button{flex:1;border:none;border-radius:0;background:var(--paper);font-size:11px;padding:11px 6px;color:var(--ink);font-family:'Oswald',sans-serif;font-weight:600;text-transform:uppercase;letter-spacing:.05em;cursor:pointer;}
+.util-tabs button.active{background:var(--ink);color:var(--paper);}
+.shift-label{font-family:'Oswald',sans-serif;font-weight:700;font-size:15px;letter-spacing:.06em;text-transform:uppercase;text-align:center;padding:10px;border:2px solid var(--ink);border-radius:var(--paper-radius);margin-bottom:8px;background:var(--paper-deep);}
+.shift-switch{text-align:center;font-size:11.5px;color:var(--ink-soft);text-decoration:underline;cursor:pointer;margin-bottom:16px;}
+.util-alert{border:3px solid var(--very-high);border-radius:var(--paper-radius);background:#FBEFEC;padding:14px;margin-bottom:16px;text-align:center;}
+.util-alert .a-title{font-family:'Oswald',sans-serif;font-weight:700;font-size:16px;letter-spacing:.08em;color:var(--very-high);animation:blink 1s steps(2,start) infinite;}
+@keyframes blink{50%{opacity:0;}}
+.util-alert .a-list{font-size:12px;color:var(--ink);margin-top:8px;line-height:1.6;}
+.meter-card{border:2px solid var(--ink);border-radius:var(--paper-radius);padding:12px;margin-bottom:11px;}
+.meter-card.exceeded{border-color:var(--very-high);background:#FBEFEC;}
+.mc-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+.mc-name{font-family:'Oswald',sans-serif;font-weight:700;font-size:14px;text-transform:uppercase;letter-spacing:.04em;}
+.mc-prev{font-size:10.5px;color:var(--ink-soft);}
+.mc-usage{font-size:11px;margin-top:7px;color:var(--ink-soft);}
+.mc-usage b{color:var(--ink);}
+.mc-usage.over b{color:var(--very-high);}
+.limit-pill{font-family:'Oswald',sans-serif;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:20px;background:var(--paper-deep);color:var(--ink-soft);border:1px solid var(--line);}
+.util-locked{text-align:center;padding:30px 18px;border:2px dashed var(--line);border-radius:var(--paper-radius);}
+.util-locked .big{font-family:'Oswald',sans-serif;font-weight:700;font-size:17px;text-transform:uppercase;color:var(--done);margin-bottom:6px;}
+.util-table-wrap{overflow-x:auto;border:2px solid var(--ink);border-radius:var(--paper-radius);}
+.util-table-wrap table{width:100%;border-collapse:collapse;font-size:11px;}
+.util-table-wrap th,.util-table-wrap td{border:1px solid var(--line);padding:5px 6px;text-align:center;}
+.util-table-wrap th{background:var(--paper-deep);font-family:'Oswald',sans-serif;font-weight:600;text-transform:uppercase;font-size:10px;}
+.util-table-wrap td.over{background:#FBEFEC;color:var(--very-high);font-weight:700;}
+.chart-box{border:2px solid var(--ink);border-radius:var(--paper-radius);padding:12px;margin-bottom:14px;}
+.chart-box h4{font-family:'Oswald',sans-serif;margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:.05em;}
+.limit-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;}
+.limit-grid .lg-cell{border:1px solid var(--line);border-radius:var(--paper-radius);padding:8px;}
+.limit-grid .lg-cell .field-label{margin-bottom:4px;}
+.limit-grid input{margin-bottom:0;font-size:13px;padding:7px 8px;}
+</style>
+</head>
+<body>
+<div id="app"><div style="padding:60px 20px; text-align:center; font-family:'Space Mono',monospace; color:#6E6457; font-size:13px;">Loading checklist…</div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script>
+/* ============================================================
+   SUPABASE CONNECTION
+============================================================ */
+const SUPABASE_URL = 'https://bipeeundccfcntgzwkkk.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJpcGVldW5kY2NmY250Z3p3a2trIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzMDQzMzAsImV4cCI6MjA5Njg4MDMzMH0.H-lVWBDNFDVMKkvGhu4kAwFJvrtNzN-3lXWZakqwc9E';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/* ============================================================
+   CHECKLISTS CONFIG
+============================================================ */
+const CHECKLISTS = {
+  opening_small: {label:'Opening Small', icon:'☀️'},
+  opening_big: {label:'Opening Big (Kitchen)', icon:'🍳'},
+  closing_small: {label:'Closing Small', icon:'🌙'},
+  closing_big: {label:'Closing Big (Kitchen)', icon:'🔒'}
+};
+const CHECKLIST_ORDER = ['opening_small','opening_big','closing_small','closing_big'];
+
+/* ============================================================
+   LOCAL HELPERS (only the device's session is kept locally —
+   all checklist data lives in Supabase)
+============================================================ */
+const DB = {
+  load(key, fallback){
+    const v = localStorage.getItem(key);
+    return v ? JSON.parse(v) : fallback;
+  },
+  save(key, val){ localStorage.setItem(key, JSON.stringify(val)); }
+};
+
+const DEFAULT_STAFF = [
+  {id:'s1', name:'Gina', role:'staff'},
+  {id:'s2', name:'Shakira', role:'staff'},
+  {id:'owner', name:'Owner', role:'owner'}
+];
+
+function buildTasks(rows, prefix){
+  return rows.map((t,i)=>({id:prefix+(i+1), text:t[0], priority:t[1], time:t[2], active:true, order:i}));
+}
+
+const DEFAULT_TASKS_BY_CHECKLIST = {
+  opening_small: buildTasks([
+["MAGBUKAS NG TINDAHAN AGAD","Very High","08:00"],
+['"OPEN" signage',"Low","08:00"],
+["Open light","Low","08:00"],
+["Open light signage","Low","08:00"],
+["Ayusin tables and chairs sa labas","Low","08:30"],
+["Speaker","High","08:10"],
+["Music","High","08:30"],
+["Turn on Aircon","High","09:00"],
+["Nasulat na Electricity & Water Meter Reading","Low","09:00"],
+["Wiped windows","Medium","09:00"],
+["Lagpas 900g ang whipping cream sa ref?","Very High","08:20"],
+["Basa logbook","Very High","08:10"],
+["Gasul kasya within the day","High","09:00"],
+["Isaksak printer","Very High","09:00"],
+["I-on radio","Medium","08:20"],
+["Palitan lumang bulaklak","Low","08:30"],
+["Ayusin mesa","High","08:30"],
+["Ayusin tables","High","08:30"],
+["Icharge battery RC and SPOTLIGHT","Low","09:00"],
+["Icharge dumbell lights","Low","09:00"],
+["Maglagay yelo at tubig service water","High","09:00"],
+["Maglinis sa labas ng store","High","10:00"],
+["Punuin water sa coffee machine","Very High","09:00"],
+["Maglinis sa gilid ng store","Low","11:00"],
+["Linisin ang race track","High","11:00"],
+["Lagyan ng sauces ang condiments section sa dine in","Very High","09:00"],
+["Lagyan ng kutsara tinidor ang dine in at small kitchen","Very High","09:00"],
+["Nakapagdisplay ng 36 pcs wings sa display sa Kawayan?","Very High","11:00"],
+["Clean Rooms (if any guests checkout)","High","09:10"],
+["Check stocks kung may nakalabas na lagpas one day, kung meron ilagay sa freezer","Very High","11:00"],
+["Dinikit lahat ng resibo sa logbook?","Very High","11:00"],
+["Ready for occupancy ang airbnb?","Medium","11:00"],
+["Walang sira sa motor at tricycle?","Low","11:00"],
+["Nacheck na ang PULSE at AIRBNB app?","High","11:00"],
+["Kung Martes ngayon, isend sa Whatsapp ang needed orders from Belcris at Prince","High","11:00"],
+["Nalabhan at nasampay na ang mga nagamit sa Airbnb","High","12:00"],
+["Walang nabasag or nasira?","High","11:00"]
+  ], "t"),
+  opening_big: buildTasks([
+    ["Filtered Used Oil","Low","09:00"],
+    ["Wiped windows","Medium","09:00"],
+    ["Cook Rice","Very High","09:30"],
+    ["Labas stocks wings","Very High","08:30"],
+    ["Labas stocks Bacon (5), Hungsilog (6)","Very High","08:20"],
+    ["Lagpas sa 200g ang WET waffle mixture?","Very High","08:30"],
+    ["Sauce","Very High","09:00"],
+    ["Lagpas sa 500g ang Breading","Very High","09:00"],
+    ["Lagpas 3 kilos ang Potato","Medium","09:00"],
+    ["Basa logbook","Very High","08:10"],
+    ["Gasul kasya within the day","High","09:00"],
+    ["Labas wings","Very High","08:20"],
+    ["Cook Tapioca and placed in Small Kitchen","Medium","09:00"],
+    ["Remaining lechon weight (nasa Chiller)","Very High","09:00"],
+    ["Pinunasan ang mga condiments (suka, catsup, hotsauce)","Very High","09:00"],
+    ["Chineck ang water jug kung may laman at yelo","Very High","09:00"],
+    ["Fully stocked ang tissues, spoon, fork, straws","Very High","09:00"],
+    ["Isaksak printer","Very High","09:00"],
+    ["I-on radio","Medium","08:20"],
+    ["Common CR cleaned","Very High","11:00"],
+    ["Below 70 ang gasul? Magpadeliver na ng backup","Very High","09:30"],
+    ["Clean Rooms (if any guests checkout)","High","09:10"],
+    ["Check stocks kung may nakalabas na lagpas one day, kung meron ilagay sa freezer","Very High","11:00"],
+    ["Ready for occupancy ang airbnb?","Medium","11:00"],
+    ["Kung Monday ngayon, isend sa Whatsapp ang needed orders from Belcris","High","11:00"],
+    ["Kung Martes ngayon, isend sa Whatsapp ang needed orders from Prince","High","11:00"],
+    ["Walang nabasag or nasira?","High","11:00"],
+  ], "ob"),
+  closing_small: buildTasks([
+    ["Refrigerator Closed","Very High","21:00"],
+    ["Mesa","Low","21:00"],
+    ["Chairs","Low","21:00"],
+    ["Mopped floors, wiped windows","Medium","21:00"],
+    ["Aircon OFF","Very High","21:00"],
+    ["Windows closed","Very High","21:00"],
+    ["Speaker kept","Very High","21:00"],
+    ["signage LED off","Low","21:00"],
+    ["signage closed","Low","21:00"],
+    ["Lights OFF","Medium","21:00"],
+    ["Electric fan OFF","Medium","21:00"],
+    ["Ceiling Fan OFF","High","21:00"],
+    ["RC Cars","Very High","21:00"],
+    ["Toys","Low","21:00"],
+    ["Generator safe from rain","Very High","21:00"],
+    ["GASUL OFF","Very High","21:00"],
+    ["Hallway lights OFF (ON if with guests)","Medium","20:00"],
+    ["Linisin hallway","Low","21:00"],
+    ["Kitchen door Closed","Very High","21:00"],
+    ["Warehouse & RC Room Closed","Very High","21:00"],
+    ["Kawayanan Closed","Very High","21:00"],
+    ["Stocks kept safe","Very High","21:00"],
+    ["Gulay kept safe/chilled","High","21:00"],
+    ["No dishes left","Medium","21:00"],
+    ["Garbage thrown","High","21:00"],
+    ["Check if with JACOS pickup","Very High","19:00"],
+    ["Ayusin mesa sa airbnb","Low","21:00"],
+    ["30 pcs yelo","High","21:00"],
+    ["Itapon basura","High","21:00"],
+    ["Pakainin isda","Low","21:00"],
+    ["Water in Coffee Machine","Very High","21:00"],
+    ["Repacked remaining tapioca?","Medium","20:00"],
+    ["Walang bulok or pabulok na gulay?","High","21:00"],
+    ["Chess (32pcs)/Snake and Ladders (6pcs)","Very High","21:00"],
+    ["Close Doors","Very High","21:00"],
+    ["Sent sales logbook via WhatsApp","Very High","21:00"],
+    ["Ilaw OFF","Low","21:00"],
+    ["Printer OFF","Low","21:00"],
+    ["Fan OFF","Very High","21:00"],
+    ["Remove yung gamit sa tables","Low","21:00"],
+    ["Punuin water sa coffee machine","Very High","21:00"],
+    ["Walang stocks na kailangan?","Very High","21:00"],
+    ["Walang nalaglag sa ilalim ng mga tables?","High","21:00"],
+    ["Nasulat na Water and Electricity Meter Reading?","Low","21:00"],
+    ["Nacheck na ang PULSE at AIRBNB app?","High","21:00"],
+    ["Kung may guests, ipasok ang sampayan sa warehouse or hallway","Very High","21:00"],
+    ["Kung may tulo, ireport agad sa WhatsApp","Very High","21:00"],
+    ["Lahat ng sheets sa airbnb ay naplantsa?","Low","18:00"],
+    ["Walang basag or nasira?","High","21:00"],
+    ["Dinikit lahat ng resibo sa logbook?","Very High","21:00"],
+  ], "cs"),
+  closing_big: buildTasks([
+    ["No dishes left","Medium","21:00"],
+    ["Garbage thrown","High","21:00"],
+    ["Takpan kawali especially buffalo sauce","Very High","21:00"],
+    ["Linisin lahat pangsalok","Very High","21:00"],
+    ["Itapon basura","High","21:00"],
+    ["Common CR cleaned","Medium","21:00"],
+    ["Motorcycles parked correctly","High","21:00"],
+    ["Walang bulok or pabulok na gulay?","High","21:00"],
+    ["Brush kitchen sahig (with brush and sabon)","High","21:00"],
+    ["Brush sink, stainless table and tables","High","21:00"],
+    ["Sabunin stove","High","21:00"],
+    ["Labas stocks lechon, if stocks below 8 packs","Very High","21:00"],
+    ["Wings (36)","Very High","21:00"],
+    ["Lechon stocks remaining","Very High","21:00"],
+    ["Ilaw OFF","Low","21:00"],
+    ["Printer OFF","Low","21:00"],
+    ["Fan OFF","Very High","21:00"],
+    ["Exhaust OFF","Very High","21:00"],
+    ["Freezer stocks , meron pa (tapa, toci, fish)","Very High","21:00"],
+    ["Potato Slicer Cleaned","High","21:00"],
+    ["Nakasaksak lahat ng equipment tulad ng freezer at chiller","Very High","21:00"],
+    ["Chiller stocks (toci 3, tapa 2, fish/shrimp 1)","Very High","21:00"],
+    ["Patatas, maayos ang pagkalagay","High","21:00"],
+    ["Nalinis ang microwave at air fryer","High","21:00"],
+    ["Hasain ang LAHAT NG KUTSILYO","Low","18:00"],
+    ["linisin at hugasan na ang rice cooker","Low","21:00"],
+    ["salain ang used oil sa mga kalan","High","21:00"],
+    ["Combine ang ginagamit sa egg at wings","High","21:00"],
+    ["Remove yung gamit sa tables","Low","21:00"],
+    ["Maglabas thigh, wings at SKIN","Very High","21:00"],
+    ["Na-chiller na ang tirang RICE?","Very High","22:00"],
+    ["Walang stocks na kailangan?","Very High","21:00"],
+    ["Walang nalaglag sa ilalim ng mga tables?","High","21:00"],
+    ["Cleaned airbnb if any guests checkout","Very High","21:00"],
+    ["Nalinis na ang CR ng airbnb (kung may guests kanina)?","Low","18:00"],
+    ["Walang basag or nasira?","High","21:00"],
+  ], "cb"),
+};
+
+const PRIORITY_ORDER = {'Very High':0,'High':1,'Medium':2,'Low':3};
+const PRIORITY_CLASS = {'Very High':'very-high','High':'high','Medium':'medium','Low':'low'};
+
+// Sort tasks by earliest deadline time first, then by priority (Very High first)
+function sortTasks(a,b){
+  const ta=(a.time||'99:99'), tb=(b.time||'99:99');
+  if(ta!==tb) return ta<tb?-1:1;
+  return (PRIORITY_ORDER[a.priority]??9)-(PRIORITY_ORDER[b.priority]??9);
+}
+
+/* ============================================================
+   IN-MEMORY CACHE — populated by initData(), kept in sync with Supabase
+============================================================ */
+let cache = { staff: DEFAULT_STAFF, tasksByChecklist: {}, stateByChecklist: {}, historyByChecklist: {}, todaySubmissions: {}, settings: {owner_whatsapp:''} };
+CHECKLIST_ORDER.forEach(k=>{
+  cache.tasksByChecklist[k] = DEFAULT_TASKS_BY_CHECKLIST[k];
+  cache.stateByChecklist[k] = {};
+  cache.historyByChecklist[k] = [];
+});
+
+function getStaff(){ return cache.staff; }
+function getTasks(){ return cache.tasksByChecklist[currentChecklist] || []; }
+function setTasks(t){ cache.tasksByChecklist[currentChecklist] = t; syncTasks(t, currentChecklist); }
+// taskState: {taskId: {status:'done'|'not_done'|null, reason:'', reasonAt, doneAt, confirmed, wasPendingFromBefore}}
+function getTaskState(){ return cache.stateByChecklist[currentChecklist] || {}; }
+function setTaskState(s){ cache.stateByChecklist[currentChecklist] = s; syncTaskState(s, currentChecklist); }
+function getHistory(){ return cache.historyByChecklist[currentChecklist] || []; }
+function pushHistory(entry){
+  const h = cache.historyByChecklist[currentChecklist] || [];
+  h.unshift(entry);
+  cache.historyByChecklist[currentChecklist] = h.slice(0,50);
+  syncSubmission(entry, currentChecklist);
+}
+
+/* ---- Push changes to Supabase (fire-and-forget, errors go to console) ---- */
+async function syncTasks(tasks, checklist){
+  const rows = tasks.map(t=>({id:t.id, checklist, text:t.text, priority:t.priority, time:t.time, active:t.active, sort_order:t.order}));
+  const {error} = await sb.from('tasks').upsert(rows);
+  if(error) console.error('syncTasks error', error);
+}
+async function syncTaskState(state, checklist){
+  const rows = Object.keys(state).map(taskId=>{
+    const s = state[taskId] || {};
+    return {
+      task_id: taskId, checklist,
+      status: s.status || null,
+      reason: s.reason || '',
+      reason_at: s.reasonAt || null,
+      done_at: s.doneAt || null,
+      confirmed: !!s.confirmed,
+      was_pending_from_before: !!s.wasPendingFromBefore,
+      late_reason: s.lateReason || null,
+      late_flag: !!s.lateFlag,
+      updated_by: session ? session.name : null,
+      updated_at: new Date().toISOString()
+    };
+  });
+  if(!rows.length) return;
+  const {error} = await sb.from('task_state').upsert(rows);
+  if(error) console.error('syncTaskState error', error);
+}
+async function syncSubmission(entry, checklist){
+  const {error} = await sb.from('submissions').insert({
+    checklist,
+    staff_name: entry.staff,
+    undone_count: entry.undoneCount,
+    undone_items: entry.undoneItems || null
+  });
+  if(error) console.error('syncSubmission error', error);
+}
+
+/* ---- App settings (e.g. owner's WhatsApp number) ---- */
+async function saveSetting(key, value){
+  cache.settings[key] = value;
+  const {error} = await sb.from('app_settings').upsert({key, value});
+  if(error) console.error('saveSetting error', error);
+}
+function formatPhoneForWa(raw){
+  let digits = (raw||'').replace(/[^0-9]/g, '');
+  if(!digits) return '';
+  if(digits.startsWith('0')) digits = '63' + digits.slice(1); // PH local -> country code
+  return digits;
+}
+
+/* ---- Once-a-day helpers (Asia/Manila timezone) ---- */
+function todayKey(){
+  return new Date().toLocaleDateString('en-CA', {timeZone:'Asia/Manila'});
+}
+async function fetchTodaySubmissions(){
+  const today = todayKey();
+  const map = {};
+  try{
+    const {data, error} = await sb.from('submissions').select('*')
+      .gte('submitted_at', today+'T00:00:00+08:00')
+      .lt('submitted_at', today+'T23:59:59+08:00')
+      .order('submitted_at', {ascending:true});
+    if(error) throw error;
+    (data||[]).forEach(r=>{
+      const d = new Date(r.submitted_at);
+      map[r.checklist] = {
+        staff_name: r.staff_name,
+        undone_count: r.undone_count,
+        timeStr: d.toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit', timeZone:'Asia/Manila'})
+      };
+    });
+  }catch(e){ console.error('fetchTodaySubmissions error', e); }
+  return map;
+}
+
+/* ---- Load everything from Supabase on startup ---- */
+async function initData(){
+  try{
+    const [staffRes, tasksRes, stateRes, todaySubs, settingsRes] = await Promise.all([
+      sb.rpc('get_staff_list'),
+      sb.from('tasks').select('*').order('sort_order'),
+      sb.from('task_state').select('*'),
+      fetchTodaySubmissions(),
+      sb.from('app_settings').select('*')
+    ]);
+
+    if(settingsRes.data){
+      settingsRes.data.forEach(r=>{ cache.settings[r.key] = r.value; });
+    }
+
+    if(staffRes.data && staffRes.data.length) cache.staff = staffRes.data;
+
+    if(tasksRes.data && tasksRes.data.length){
+      const grouped = {};
+      tasksRes.data.forEach(t=>{
+        (grouped[t.checklist] = grouped[t.checklist] || []).push({id:t.id, text:t.text, priority:t.priority, time:t.time, active:t.active, order:t.sort_order});
+      });
+      Object.keys(grouped).forEach(k=>{ if(grouped[k].length) cache.tasksByChecklist[k] = grouped[k]; });
+    }
+
+    (stateRes.data || []).forEach(r=>{
+      const ck = r.checklist;
+      if(!cache.stateByChecklist[ck]) cache.stateByChecklist[ck] = {};
+      cache.stateByChecklist[ck][r.task_id] = {
+        status: r.status,
+        reason: r.reason || '',
+        reasonAt: r.reason_at,
+        doneAt: r.done_at,
+        confirmed: r.confirmed,
+        wasPendingFromBefore: r.was_pending_from_before,
+        lateReason: r.late_reason,
+        lateFlag: r.late_flag
+      };
+    });
+
+    cache.todaySubmissions = todaySubs;
+
+    const {data: histData} = await sb.from('submissions').select('*').order('submitted_at', {ascending:false}).limit(200);
+    (histData || []).forEach(h=>{
+      const d = new Date(h.submitted_at);
+      const entry = {
+        staff: h.staff_name,
+        date: d.toLocaleDateString('en-PH',{month:'short',day:'numeric', timeZone:'Asia/Manila'}),
+        time: d.toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit', timeZone:'Asia/Manila'}),
+        undoneCount: h.undone_count
+      };
+      if(!cache.historyByChecklist[h.checklist]) cache.historyByChecklist[h.checklist] = [];
+      if(cache.historyByChecklist[h.checklist].length < 50) cache.historyByChecklist[h.checklist].push(entry);
+    });
+  }catch(err){
+    console.error('initData failed — using offline defaults', err);
+  }
+}
+
+/* ============================================================
+   APP STATE & ROUTER
+============================================================ */
+let session = DB.load('session', null);
+let currentChecklist = null;
+let route = session ? 'select' : 'login';
+let lastSubmission = null;
+let showDoneList = false;
+let showNotDoneList = true;
+let adminEditingTaskId = null;
+
+/* ----- Access-code gate -----
+   App shows a code box on first open. Once entered correctly on a device,
+   it's remembered, so staff type it only once. Nothing appears in the URL. */
+const ACCESS_CODE = 'Godneverfails26#';
+function accessGranted(){
+  try{ return localStorage.getItem('access_ok') === '1'; }catch(e){ return false; }
+}
+
+function nowStamp(){
+  const d = new Date();
+  return d.toLocaleDateString('en-PH',{month:'short',day:'numeric'}) + ', ' + d.toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'});
+}
+
+// Returns true if the current Manila time is past the given "HH:MM" deadline today
+function isPastDeadline(hhmm){
+  if(!hhmm || !/^\d{1,2}:\d{2}$/.test(hhmm)) return false;
+  const [h,m] = hhmm.split(':').map(Number);
+  const now = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Manila'}));
+  const nowMins = now.getHours()*60 + now.getMinutes();
+  return nowMins > (h*60 + m);
+}
+
+function go(r){ route = r; render(); window.scrollTo(0,0); }
+
+/* ============================================================
+   RENDER
+============================================================ */
+function render(){
+  const app = document.getElementById('app');
+  if(!accessGranted()){
+    app.innerHTML = `<div class="head"><div class="brand">Restaurant Checklists</div><div class="title">Access Code</div></div>
+      <div class="screen">
+        <div class="login-wrap">
+          <div class="login-stamp">ACCESS<br>CODE</div>
+          <div class="field-label">Ilagay ang access code</div>
+          <input type="password" id="access-input" placeholder="Access code">
+          <button class="btn-primary btn-block" id="btn-access">Magpatuloy</button>
+          <div id="access-err" style="color:var(--very-high); font-size:12px; margin-top:8px;"></div>
+          <p class="hint">Isang beses lang ito sa bawat device. Hingin sa management ang code.</p>
+        </div>
+      </div>`;
+    const btn = document.getElementById('btn-access');
+    if(btn) btn.addEventListener('click', ()=>{
+      const val = document.getElementById('access-input').value;
+      if(val === ACCESS_CODE){
+        try{ localStorage.setItem('access_ok','1'); }catch(e){}
+        render();
+      }else{
+        document.getElementById('access-err').textContent = 'Maling access code.';
+      }
+    });
+    const inp = document.getElementById('access-input');
+    if(inp) inp.addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('btn-access').click(); });
+    return;
+  }
+  if(route==='login') app.innerHTML = renderLogin();
+  else if(route==='select') app.innerHTML = renderHeader('select') + renderSelect();
+  else if(route==='locked') app.innerHTML = renderHeader('locked') + renderLocked();
+  else if(route==='checklist') app.innerHTML = renderHeader('checklist') + renderChecklist();
+  else if(route==='summary') app.innerHTML = renderHeader('summary') + renderSummary();
+  else if(route==='admin') app.innerHTML = renderHeader('admin') + renderAdmin();
+  else if(route==='utilities') app.innerHTML = renderHeader('utilities') + renderUtilities();
+  else if(route==='maint') app.innerHTML = renderHeader('maint') + renderMaintModule();
+  else if(route==='employee') app.innerHTML = renderHeader('employee') + renderMaintModule();
+  bindEvents();
+  if(route==='utilities') bindUtilities();
+  if(route==='maint'||route==='employee') bindPhaseA();
+}
+
+function renderHeader(view){
+  const staff = session;
+  const dateStr = new Date().toLocaleDateString('en-PH', {weekday:'short', month:'short', day:'numeric', timeZone:'Asia/Manila'});
+  const timeStr = new Date().toLocaleTimeString('en-PH', {hour:'2-digit', minute:'2-digit', timeZone:'Asia/Manila'});
+  let brand = 'Restaurant Checklists';
+  let title = 'Mga Checklist';
+  let nav = '';
+
+  if(view==='select'){
+    if(staff.role==='owner') nav = `<span class="nav-link" data-go="admin">⚙ Admin Panel</span>`;
+  }else if(view==='admin'){
+    brand = 'Admin';
+    title = 'Admin Panel';
+    nav = `<span class="nav-link" data-go="select">← Mga Checklist</span>`;
+  }else if(view==='utilities'){
+    brand = 'Utilities Monitor';
+    title = '💧 Utilities';
+    nav = `<span class="nav-link" data-go="select">← Mga Checklist</span>`;
+  }else if(view==='maint'){
+    brand = 'Maintenance';
+    title = '🔧 Maintenance';
+    nav = `<span class="nav-link" data-go="select">← Mga Module</span>`;
+  }else if(view==='employee'){
+    brand = 'Employee Hub';
+    title = '👥 Employee Hub';
+    nav = `<span class="nav-link" data-go="select">← Mga Module</span>`;
+  }else{
+    const cfg = CHECKLISTS[currentChecklist] || {label:'Checklist', icon:''};
+    brand = cfg.label;
+    title = `${cfg.icon} ${cfg.label}`;
+    nav = `<span class="nav-link" data-go="select">← Mga Checklist</span>`;
+    if(view==='checklist' && staff.role==='owner'){
+      nav += ` &nbsp; <span class="nav-link" data-go="admin">⚙ Admin</span>`;
+    }
+  }
+
+  return `
+  <div class="ticket-head">
+    <div class="brand">${brand}</div>
+    <div class="title">${title}</div>
+    <div class="subtitle">
+      <span>👤 <b>${staff.name}</b></span>
+      <span>${dateStr} · ${timeStr}</span>
+      <span class="nav-link" data-go="logout">Logout</span>
+    </div>
+    ${nav ? `<div style="margin-top:8px;">${nav}</div>` : ''}
+  </div>`;
+}
+
+/* ---------------- LOGIN ---------------- */
+function renderLogin(){
+  const staff = getStaff();
+  const opts = staff.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
+  return `
+  <div class="screen">
+    <div class="login-wrap">
+      <div class="login-stamp">SECURED<br>ENTRY</div>
+      <div class="field-label">Pumili ng pangalan / Select your name</div>
+      <select id="login-staff">${opts}</select>
+      <div class="field-label">PIN</div>
+      <input type="password" id="login-pin" maxlength="6" placeholder="passcode">
+      <button class="btn-primary btn-block" id="btn-login">Mag-login</button>
+      <div id="login-error" style="color:var(--very-high); font-size:12px; margin-top:8px;"></div>
+    </div>
+  </div>`;
+}
+
+/* ---------------- CHECKLIST SELECTOR ---------------- */
+function renderSelect(){
+  const cards = CHECKLIST_ORDER.map(key=>{
+    const cfg = CHECKLISTS[key];
+    const sub = cache.todaySubmissions[key];
+    let badge, sub1;
+    if(sub){
+      badge = sub.undone_count > 0
+        ? `<span class="cc-badge flag">${sub.undone_count} hindi tapos</span>`
+        : `<span class="cc-badge done">✓ Tapos</span>`;
+      sub1 = `Naisumite ni ${escapeHtml(sub.staff_name)} · ${sub.timeStr}`;
+    }else{
+      badge = `<span class="cc-badge pending">Hindi pa</span>`;
+      sub1 = 'Hindi pa nasusumite ngayong araw';
+    }
+    return `
+    <div class="checklist-card" data-action="open-checklist" data-checklist="${key}">
+      <div class="cc-left">
+        <div class="cc-title">${cfg.icon} ${cfg.label}</div>
+        <div class="cc-sub">${sub1}</div>
+      </div>
+      ${badge}
+    </div>`;
+  }).join('');
+
+  return `
+  <div class="screen">
+    <div class="field-label">Pumili ng Checklist</div>
+    <div class="checklist-grid">${cards}</div>
+    <div class="field-label" style="margin-top:18px;">Iba pa</div>
+    <div class="checklist-grid">
+      <div class="checklist-card" data-action="open-utilities">
+        <div class="cc-left">
+          <div class="cc-title">💧 Utilities Monitor</div>
+          <div class="cc-sub">Water, kuryente at gas meter readings</div>
+        </div>
+        <span class="cc-badge pending">Buksan</span>
+      </div>
+      <div class="checklist-card" data-action="open-maint">
+        <div class="cc-left">
+          <div class="cc-title">🔧 Maintenance</div>
+          <div class="cc-sub">Grease trap, generator, descaling</div>
+        </div>
+        ${maintDueBadge()}
+      </div>
+      <div class="checklist-card" data-action="open-employee">
+        <div class="cc-left">
+          <div class="cc-title">👥 Employee Hub</div>
+          <div class="cc-sub">Leave requests</div>
+        </div>
+        <span class="cc-badge pending">Buksan</span>
+      </div>
+    </div>
+  </div>`;
+}
+
+function maintDueBadge(){
+  const today = todayKey();
+  let due=0;
+  (cache.maintTasks||[]).filter(t=>t.active).forEach(t=>{
+    const d=maintComputeDue(t); const st=(cache.maintState||{})[t.id]||{};
+    const done=st.status==='done'&&st.due_date===d.dueDate;
+    if(!done && today>=d.dueDate) due++;
+  });
+  return due ? `<span class="cc-badge flag">${due} due</span>` : `<span class="cc-badge pending">Buksan</span>`;
+}
+
+/* ---------------- LOCKED (already submitted today) ---------------- */
+function renderLocked(){
+  const cfg = CHECKLISTS[currentChecklist];
+  const sub = cache.todaySubmissions[currentChecklist] || {};
+  return `
+  <div class="screen">
+    <div class="locked-box">
+      <div class="big">✓ Naisumite na Ngayong Araw</div>
+      <p style="font-size:13px; color:var(--ink-soft);">
+        Ni <b>${escapeHtml(sub.staff_name||'')}</b> sa ${sub.timeStr||''}.
+        ${sub.undone_count>0 ? `<br>${sub.undone_count} item ang hindi pa tapos.` : ''}
+        <br>Pwede ulit bukas.
+      </p>
+    </div>
+    <button class="btn-ghost btn-block" style="margin-top:16px;" data-go="select">← Bumalik sa Mga Checklist</button>
+  </div>`;
+}
+
+/* ---------------- CHECKLIST ---------------- */
+function renderChecklist(){
+  const tasks = getTasks().filter(t=>t.active).sort(sortTasks);
+  const state = getTaskState();
+
+  const isDone = t => { const st=state[t.id]; return st && st.status==='done'; };
+  const isConfirmedNotDone = t => { const st=state[t.id]; return st && st.status==='not_done' && st.confirmed; };
+
+  const visibleTasks = tasks.filter(t=> !isDone(t) && !isConfirmedNotDone(t));
+  const doneTasks = tasks.filter(isDone);
+  const notDoneTasks = tasks.filter(isConfirmedNotDone);
+
+  const total = tasks.length;
+  const resolvedCount = doneTasks.length + notDoneTasks.length;
+  const pct = total ? Math.round(resolvedCount/total*100) : 0;
+
+  const rows = visibleTasks.map(t=>{
+    const st = state[t.id] || {status:null, reason:''};
+    const wasPending = st.wasPendingFromBefore;
+    const cardClass = wasPending ? 'is-pending':'';
+    const reasonMissing = st.status==='not_done' && !st.reason;
+    return `
+    <div class="task-card ${cardClass}" data-task="${t.id}">
+      ${wasPending ? `<div class="pending-flag">Hindi natapos noong nakaraang shift</div>` : ''}
+      <div class="task-top">
+        <div class="task-text">${escapeHtml(t.text)}</div>
+        <div class="task-meta">
+          <span class="tag ${PRIORITY_CLASS[t.priority]}">${t.priority}</span>
+          <span class="deadline">⏰ ${t.time}</span>
+        </div>
+      </div>
+      <div class="status-row">
+        <button class="status-btn done ${st.status==='done'?'active':''}" data-action="status" data-task="${t.id}" data-val="done">✓ Tapos</button>
+        <button class="status-btn notdone ${st.status==='not_done'?'active':''}" data-action="status" data-task="${t.id}" data-val="not_done">✕ Hindi Pa</button>
+      </div>
+      <div class="reason-box" style="display:${st.status==='not_done'?'block':'none'}">
+        <input type="text" placeholder="Bakit hindi pa natapos? (required)" value="${escapeHtml(st.reason||'')}" data-action="reason" data-task="${t.id}">
+        <div class="reason-warn ${reasonMissing ? 'show':''}" data-warn="${t.id}">Kailangan ng dahilan bago isumite.</div>
+        <button class="btn-primary btn-block reason-submit" data-action="confirm-reason" data-task="${t.id}" ${reasonMissing?'disabled':''}>Isumite ang Dahilan</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  const notDoneRows = notDoneTasks.map(t=>{
+    const st = state[t.id];
+    return `<div class="notdone-row">
+      <div class="nr-top">
+        <span class="nr-text">${escapeHtml(t.text)}</span>
+        <button class="btn-small" data-action="edit-notdone" data-task="${t.id}">Baguhin</button>
+      </div>
+      <div class="nr-reason">Dahilan: ${escapeHtml(st.reason)}</div>
+      ${st.reasonAt ? `<div class="nr-time">📝 Na-log: ${st.reasonAt}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  const doneRows = doneTasks.map(t=>{
+    const st = state[t.id];
+    return `<div class="done-row">
+        <span class="dt">${escapeHtml(t.text)}</span>
+        <span class="done-time">✓ ${st.doneAt || ''}</span>
+        <button class="btn-small" data-action="undo-done" data-task="${t.id}">Undo</button>
+      </div>`;
+  }).join('');
+
+  const notDoneSection = notDoneTasks.length ? `
+    <div class="notdone-toggle" data-action="toggle-notdone">${showNotDoneList?'▲':'▼'} Hindi Tapos (${notDoneTasks.length})</div>
+    <div class="notdone-list ${showNotDoneList?'':'hidden'}">${notDoneRows}</div>` : '';
+
+  const doneSection = doneTasks.length ? `
+    <div class="done-toggle" data-action="toggle-done">${showDoneList?'▲':'▼'} Tapos na (${doneTasks.length})</div>
+    <div class="done-list ${showDoneList?'':'hidden'}">${doneRows}</div>` : '';
+
+  return `
+  <div class="screen">
+    <div class="progress-label"><span>Progress</span><span>${resolvedCount} / ${total} nasagot</span></div>
+    <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+    ${visibleTasks.length ? rows : `<div class="empty-note">Wala nang task na naka-pending. 🎉<br>Pwede mo na isumite ang checklist.</div>`}
+    ${notDoneSection}
+    ${doneSection}
+  </div>
+  <div class="footer-bar">
+    <button class="btn-block btn-primary" id="btn-submit">Isumite ang Checklist</button>
+  </div>`;
+}
+
+/* ---------------- SUMMARY ---------------- */
+function renderSummary(){
+  if(!lastSubmission){ go('checklist'); return ''; }
+  const undone = lastSubmission.undone;
+  let body;
+  if(undone.length===0){
+    body = `<div class="summary-stamp">
+      <div class="big">✓ Lahat Tapos!</div>
+      <p style="font-size:13px; color:var(--ink-soft)">Maayos ang checklist. Salamat ${escapeHtml(session.name)}!</p>
+    </div>
+    <div class="empty-note">Walang kailangan i-report sa WhatsApp ngayong araw.</div>`;
+  }else{
+    body = `<div class="summary-stamp">
+      <div class="big" style="color:var(--very-high)">${undone.length} Hindi Natapos</div>
+      <p style="font-size:13px; color:var(--ink-soft)">Makikita pa rin ito sa susunod na shift hanggang matapos.</p>
+    </div>
+    <div class="summary-list">
+      ${undone.map(u=>`<div class="summary-item">
+          <b>${escapeHtml(u.text)}</b>
+          <div class="r">Dahilan: ${escapeHtml(u.reason)}</div>
+          ${u.reasonAt ? `<div class="r">📝 Na-log: ${u.reasonAt}</div>` : ''}
+        </div>`).join('')}
+    </div>
+    <div class="empty-note" style="border-color:var(--ok);color:var(--ok)">✓ Awtomatikong na-report sa management ang mga hindi tapos.</div>`;
+  }
+  return `<div class="screen">${body}
+    <button class="btn-ghost btn-block" id="btn-back-checklist">← Bumalik sa Mga Checklist</button>
+  </div>`;
+}
+
+function buildWhatsappMessage(){
+  const undone = lastSubmission.undone;
+  const dateStr = new Date().toLocaleDateString('en-PH', {weekday:'long', month:'short', day:'numeric', year:'numeric', timeZone:'Asia/Manila'});
+  const timeStr = new Date().toLocaleTimeString('en-PH', {hour:'2-digit', minute:'2-digit', timeZone:'Asia/Manila'});
+  const label = CHECKLISTS[currentChecklist].label.toUpperCase();
+  let msg = `*${label} CHECKLIST*\n`;
+  msg += `${dateStr}, ${timeStr}\n`;
+  msg += `Checked by: ${session.name}\n\n`;
+  msg += `*HINDI PA TAPOS (${undone.length}):*\n`;
+  undone.forEach((u,i)=>{
+    msg += `${i+1}. ${u.text}\n   ↳ Dahilan: ${u.reason}`;
+    msg += u.reasonAt ? ` (${u.reasonAt})\n` : `\n`;
+  });
+  return msg;
+}
+
+/* ---------------- ADMIN ---------------- */
+function renderAdmin(){
+  if(!currentChecklist) currentChecklist = 'opening_small';
+  const tasks = getTasks().slice().sort(sortTasks);
+  const staff = getStaff();
+  const history = getHistory();
+
+  const taskRows = tasks.map(t=>{
+    if(adminEditingTaskId === t.id){
+      return `
+      <div class="admin-task-row editing" data-admintask="${t.id}">
+        <div class="field-label">Pangalan ng task</div>
+        <input type="text" id="edit-task-text" value="${escapeHtml(t.text)}">
+        <div class="small-grid">
+          <div>
+            <div class="field-label">Priority</div>
+            <select id="edit-task-priority">
+              ${['Very High','High','Medium','Low'].map(p=>`<option ${p===t.priority?'selected':''}>${p}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <div class="field-label">Deadline Time</div>
+            <input type="time" id="edit-task-time" value="${t.time}">
+          </div>
+        </div>
+        <label class="checkbox-label"><input type="checkbox" id="edit-task-active" ${t.active?'checked':''}> Active (lalabas sa checklist)</label>
+        <div class="btn-row">
+          <button class="btn-primary" data-action="save-task" data-task="${t.id}">I-save</button>
+          <button class="btn-ghost" data-action="cancel-edit">Kanselahin</button>
+        </div>
+      </div>`;
+    }
+    return `
+    <div class="admin-task-row" data-admintask="${t.id}">
+      <div class="top">
+        <span>${escapeHtml(t.text)}</span>
+        <span class="tag ${PRIORITY_CLASS[t.priority]}">${t.priority}</span>
+      </div>
+      <div class="top">
+        <span style="color:var(--ink-soft)">⏰ ${t.time} ${t.active? '' : '· (Inactive)'}</span>
+        <div class="admin-actions">
+          <button class="btn-small" data-action="edit-task" data-task="${t.id}">Edit</button>
+          <button class="btn-small btn-danger" data-action="delete-task" data-task="${t.id}">Tanggal</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  const staffRows = staff.map(s=>`
+    <div class="admin-task-row">
+      <div class="top">
+        <span>${escapeHtml(s.name)} ${s.role==='owner'?'(Owner)':''}</span>
+        <div class="admin-actions">
+          ${s.role!=='owner' ? `<button class="btn-small btn-danger" data-action="delete-staff" data-staff="${s.id}">Tanggal</button>` : ''}
+        </div>
+      </div>
+    </div>`).join('');
+
+  const historyRows = history.length ? history.map(h=>`
+    <div class="history-row">
+      <div class="hm"><span>${escapeHtml(h.staff)}</span><span>${h.date} ${h.time}</span></div>
+      <div>${h.undoneCount} item(s) hindi natapos</div>
+    </div>`).join('') : `<div class="empty-note">Walang record pa.</div>`;
+
+  const checklistOptions = CHECKLIST_ORDER.map(k=>`<option value="${k}" ${k===currentChecklist?'selected':''}>${CHECKLISTS[k].icon} ${CHECKLISTS[k].label}</option>`).join('');
+
+  return `
+  <div class="screen">
+    <div class="field-label">Pinamamahalaang Checklist</div>
+    <select id="admin-checklist-select">${checklistOptions}</select>
+
+    <div class="section-title">🔑 Palitan ang PIN Mo</div>
+    <div class="field-label">Kasalukuyang PIN</div>
+    <input type="password" id="pin-old" maxlength="6" inputmode="numeric" placeholder="••••">
+    <div class="field-label">Bagong PIN</div>
+    <input type="password" id="pin-new" maxlength="6" placeholder="6 char, letra+numero">
+    <div class="field-label">I-ulit ang Bagong PIN</div>
+    <input type="password" id="pin-confirm" maxlength="6" placeholder="ulitin">
+    <p class="hint">Bagong format: 6 characters, may kahit 1 letra at 1 numero (hal. ab12cd).</p>
+    <div id="pin-msg" style="font-size:12px; margin-bottom:10px;"></div>
+    <button class="btn-primary btn-block" id="btn-change-pin">I-save ang Bagong PIN</button>
+
+    <div class="section-title">⏰ Deadline Window</div>
+    <div class="field-label">Ilang oras pagkatapos ng deadline time bago mag-alert (kung walang nag-submit)</div>
+    <input type="number" step="0.5" id="deadline-window" inputmode="decimal" placeholder="4" value="${escapeHtml(cache.settings.deadline_window_hours||'4')}">
+    <div id="dw-msg" style="font-size:12px; margin-bottom:10px;"></div>
+    <button class="btn-primary btn-block" id="btn-save-deadline">I-save ang Window</button>
+
+    <div class="section-title">📲 WhatsApp Auto-Send</div>
+    <div class="field-label">Numero ng WhatsApp ng Owner (e.g. 09171234567)</div>
+    <input type="text" id="owner-whatsapp" inputmode="numeric" placeholder="09171234567" value="${escapeHtml(cache.settings.owner_whatsapp||'')}">
+    <div id="wa-msg" style="font-size:12px; margin-bottom:10px;"></div>
+    <button class="btn-primary btn-block" id="btn-save-whatsapp">I-save ang Numero</button>
+    <p style="font-size:11px; color:var(--ink-soft); margin-top:6px;">Kung naka-set ito, mag-a-auto-open ang WhatsApp papunta sa numerong ito tuwing may "Hindi Tapos" na isusumite ang staff.</p>
+
+    <div class="section-title">➕ Magdagdag ng Task</div>
+    <div class="field-label">Pangalan ng task</div>
+    <input type="text" id="new-task-text" placeholder="e.g. Linisin ang ref">
+    <div class="small-grid">
+      <div>
+        <div class="field-label">Priority</div>
+        <select id="new-task-priority">
+          <option>Very High</option><option>High</option><option selected>Medium</option><option>Low</option>
+        </select>
+      </div>
+      <div>
+        <div class="field-label">Deadline Time</div>
+        <input type="time" id="new-task-time" value="09:00">
+      </div>
+    </div>
+    <button class="btn-primary btn-block" id="btn-add-task">Idagdag</button>
+
+    <div class="section-title">📋 Mga Task — ${CHECKLISTS[currentChecklist].label} (${tasks.length})</div>
+    ${taskRows}
+
+    <div class="section-title">👥 Staff</div>
+    ${staffRows}
+    <div class="field-label" style="margin-top:14px;">Magdagdag ng Staff</div>
+    <input type="text" id="new-staff-name" placeholder="Pangalan">
+    <input type="text" id="new-staff-pin" placeholder="6-char passcode (may letra at numero)" maxlength="6">
+    <p class="hint">Passcode: eksaktong 6 characters, may kahit 1 letra at 1 numero (hal. ab12cd).</p>
+    <button class="btn-primary btn-block" id="btn-add-staff">Idagdag ang Staff</button>
+
+    <div class="section-title">🔓 Naka-lock na Staff</div>
+    <div id="locked-staff-list"><p class="hint">Naglo-load…</p></div>
+
+    <div class="section-title">🕓 Submission History</div>
+    ${historyRows}
+  </div>`;
+}
+
+/* ============================================================
+   EVENT HANDLERS
+============================================================ */
+function bindEvents(){
+  // Nav
+  document.querySelectorAll('[data-go]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const target = el.dataset.go;
+      if(target==='logout'){ session=null; DB.save('session', null); go('login'); }
+      else go(target);
+    });
+  });
+
+  // Open a checklist from the selector
+  document.querySelectorAll('[data-action="open-checklist"]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const key = el.dataset.checklist;
+      currentChecklist = key;
+      showDoneList = false;
+      showNotDoneList = true;
+      adminEditingTaskId = null;
+      const sub = cache.todaySubmissions[key];
+      if(sub && session.role !== 'owner'){
+        go('locked');
+      }else{
+        go('checklist');
+      }
+    });
+  });
+
+  // Admin: switch which checklist is being managed
+  const adminChecklistSelect = document.getElementById('admin-checklist-select');
+  if(adminChecklistSelect) adminChecklistSelect.addEventListener('change', ()=>{
+    currentChecklist = adminChecklistSelect.value;
+    adminEditingTaskId = null;
+    render();
+  });
+
+  // Open utilities monitor
+  document.querySelectorAll('[data-action="open-utilities"]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      utilTab='entry'; utilSettingsOpen=false; utilDraft={}; utilNote='';
+      utilShift = (new Date().getHours() < 15) ? 'opening' : 'closing';
+      go('utilities');
+    });
+  });
+  document.querySelectorAll('[data-action="open-maint"]').forEach(el=>{
+    el.addEventListener('click', ()=>{ maintTab='maint'; activeMaintId=null; editingMaintId=null; addingMaint=false; go('maint'); });
+  });
+  document.querySelectorAll('[data-action="open-employee"]').forEach(el=>{
+    el.addEventListener('click', ()=>{ maintTab='leave'; activeMaintId=null; go('employee'); });
+  });
+
+  // Login
+  const loginBtn = document.getElementById('btn-login');
+  if(loginBtn) loginBtn.addEventListener('click', async ()=>{
+    const staffId = document.getElementById('login-staff').value;
+    const pin = document.getElementById('login-pin').value;
+    const err = document.getElementById('login-error');
+    err.textContent = '';
+    loginBtn.disabled = true;
+    loginBtn.textContent = 'Checking...';
+    try{
+      const {data, error} = await sb.rpc('login_staff', {p_id: staffId, p_pin: pin});
+      if(error) throw error;
+      const r = data && data.length ? data[0] : null;
+      if(r && r.status === 'ok'){
+        session = {id:r.id, name:r.name, role:r.role};
+        DB.save('session', session);
+        go('select');
+        return;
+      }else if(r && r.status === 'locked_forever'){
+        err.textContent = 'Naka-lock na ang account na ito. Kailangan i-unlock ng owner.';
+      }else if(r && r.status === 'locked_temp'){
+        const until = r.locked_until ? new Date(r.locked_until).toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'}) : '';
+        err.textContent = `Naka-lock pansamantala dahil sa maling PIN. Subukan ulit mamaya${until?(' (~'+until+')'):''}, o i-unlock ng owner.`;
+      }else{
+        err.textContent = 'Maling PIN. Subukan ulit.';
+      }
+    }catch(e){
+      err.textContent = 'Walang connection. Subukan ulit.';
+      console.error(e);
+    }
+    loginBtn.disabled = false;
+    loginBtn.textContent = 'Mag-login';
+  });
+
+  // Checklist status buttons
+  document.querySelectorAll('[data-action="status"]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const taskId = el.dataset.task;
+      const val = el.dataset.val;
+      const state = getTaskState();
+      const cur = state[taskId] || {};
+      // toggle off if clicking same
+      if(cur.status === val){
+        cur.status = null;
+        if(val==='done') cur.doneAt = null;
+        if(val==='not_done'){ cur.reason=''; cur.reasonAt=null; cur.confirmed=false; }
+      }else{
+        cur.status = val;
+        if(val==='done'){
+          cur.doneAt = nowStamp();
+          cur.reason=''; cur.reasonAt=null; cur.confirmed=false;
+          // If this task is being completed AFTER its deadline time today, ask why it was late
+          const task = getTasks().find(x=>x.id===taskId);
+          if(task && task.time && isPastDeadline(task.time)){
+            const why = prompt(`Lumagpas sa oras ang task na ito (deadline: ${task.time}).\n\nBakit hindi nagawa on time? (required)`);
+            if(why===null || why.trim()===''){
+              alert('Kailangan ng dahilan kung bakit na-late. Hindi muna ito namarkahang tapos.');
+              cur.status = null; cur.doneAt = null;
+              state[taskId] = {...cur}; setTaskState(state); render(); return;
+            }
+            cur.lateReason = why.trim();
+            cur.lateFlag = true;
+          }
+        }else{
+          cur.doneAt = null;
+          cur.confirmed = false;
+        }
+      }
+      state[taskId] = {...cur};
+      setTaskState(state);
+      render();
+    });
+  });
+
+  // Reason inputs
+  document.querySelectorAll('[data-action="reason"]').forEach(el=>{
+    el.addEventListener('input', ()=>{
+      const taskId = el.dataset.task;
+      const state = getTaskState();
+      state[taskId] = state[taskId] || {};
+      state[taskId].reason = el.value;
+      setTaskState(state);
+      const warn = document.querySelector(`[data-warn="${taskId}"]`);
+      if(warn) warn.classList.toggle('show', !el.value);
+      const btn = document.querySelector(`[data-action="confirm-reason"][data-task="${taskId}"]`);
+      if(btn) btn.disabled = !el.value;
+    });
+  });
+
+  // Confirm a "Hindi Pa" reason -> moves task to the "Hindi Tapos" section with a timestamp
+  document.querySelectorAll('[data-action="confirm-reason"]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const taskId = el.dataset.task;
+      const state = getTaskState();
+      const cur = state[taskId] || {};
+      if(!cur.reason) return;
+      cur.confirmed = true;
+      cur.reasonAt = nowStamp();
+      state[taskId] = cur;
+      setTaskState(state);
+      showNotDoneList = true;
+      render();
+    });
+  });
+
+  // "Baguhin" on a confirmed not-done item -> brings it back to the active list for editing
+  document.querySelectorAll('[data-action="edit-notdone"]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const taskId = el.dataset.task;
+      const state = getTaskState();
+      if(state[taskId]) state[taskId].confirmed = false;
+      setTaskState(state);
+      render();
+    });
+  });
+
+  // Toggle "Hindi Tapos" collapsible section
+  const toggleNotDone = document.querySelector('[data-action="toggle-notdone"]');
+  if(toggleNotDone) toggleNotDone.addEventListener('click', ()=>{
+    showNotDoneList = !showNotDoneList;
+    render();
+  });
+
+  // Undo a "done" task (bring it back to the active list)
+  document.querySelectorAll('[data-action="undo-done"]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const taskId = el.dataset.task;
+      const state = getTaskState();
+      if(state[taskId]){ state[taskId].status = null; state[taskId].doneAt = null; }
+      setTaskState(state);
+      render();
+    });
+  });
+
+  // Toggle "Tapos na" collapsible section
+  const toggleDone = document.querySelector('[data-action="toggle-done"]');
+  if(toggleDone) toggleDone.addEventListener('click', ()=>{
+    showDoneList = !showDoneList;
+    render();
+  });
+
+  // Submit
+  const submitBtn = document.getElementById('btn-submit');
+  if(submitBtn) submitBtn.addEventListener('click', ()=>{
+    const tasks = getTasks().filter(t=>t.active);
+    const state = getTaskState();
+
+    // Validation
+    let firstInvalid = null;
+    for(const t of tasks){
+      const st = state[t.id];
+      if(!st || !st.status){ firstInvalid = t.id; break; }
+      if(st.status==='not_done' && !st.confirmed){ firstInvalid = t.id; break; }
+    }
+    if(firstInvalid){
+      alert('Sagutan muna ang lahat ng task. Kung "Hindi Pa", maglagay ng dahilan at i-tap ang "Isumite ang Dahilan".');
+      const card = document.querySelector(`[data-task="${firstInvalid}"]`);
+      if(card) card.scrollIntoView({behavior:'smooth', block:'center'});
+      return;
+    }
+
+    const undone = [];
+    const newState = {};
+    tasks.forEach(t=>{
+      const st = state[t.id];
+      if(st.status==='not_done'){
+        undone.push({text:t.text, reason:st.reason, reasonAt:st.reasonAt});
+        newState[t.id] = {status:'not_done', reason:st.reason, reasonAt:st.reasonAt, confirmed:true, wasPendingFromBefore:true, doneAt:null};
+      }else{
+        // done -> cleared for next shift
+        newState[t.id] = {status:null, reason:'', reasonAt:null, confirmed:false, wasPendingFromBefore:false, doneAt:null};
+      }
+    });
+    setTaskState(newState);
+    showDoneList = false;
+    showNotDoneList = true;
+
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('en-PH', {hour:'2-digit', minute:'2-digit', timeZone:'Asia/Manila'});
+    pushHistory({
+      staff: session.name,
+      date: now.toLocaleDateString('en-PH', {month:'short', day:'numeric'}),
+      time: timeStr,
+      undoneCount: undone.length,
+      undoneItems: undone
+    });
+    cache.todaySubmissions[currentChecklist] = {
+      staff_name: session.name,
+      undone_count: undone.length,
+      timeStr: timeStr
+    };
+
+    lastSubmission = {undone};
+    go('summary');
+    // Undone-item alerts are sent automatically & silently to the owners
+    // via Supabase + CallMeBot — staff don't see them.
+  });
+
+  // Back from summary
+  const backBtn = document.getElementById('btn-back-checklist');
+  if(backBtn) backBtn.addEventListener('click', ()=>go('select'));
+
+  // WhatsApp
+  const waBtn = document.getElementById('btn-whatsapp');
+  if(waBtn) waBtn.addEventListener('click', ()=>{
+    const ownerNum = formatPhoneForWa(cache.settings.owner_whatsapp);
+    const msg = buildWhatsappMessage();
+    const url = ownerNum
+      ? `https://wa.me/${ownerNum}?text=${encodeURIComponent(msg)}`
+      : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+    window.open(url, '_blank');
+  });
+
+  // Admin: save deadline window hours
+  const saveDw=document.getElementById('btn-save-deadline');
+  if(saveDw) saveDw.addEventListener('click', async ()=>{
+    const v=document.getElementById('deadline-window').value.trim();
+    const msg=document.getElementById('dw-msg');
+    if(!v || isNaN(parseFloat(v))){ msg.style.color='var(--very-high)'; msg.textContent='Maglagay ng bilang ng oras.'; return; }
+    saveDw.disabled=true;
+    try{ await saveSetting('deadline_window_hours', v); msg.style.color='var(--done)'; msg.textContent='Na-save!'; }
+    catch(e){ msg.style.color='var(--very-high)'; msg.textContent='Hindi na-save.'; console.error(e); }
+    saveDw.disabled=false;
+  });
+
+  // Admin: save owner's WhatsApp number
+  const saveWaBtn = document.getElementById('btn-save-whatsapp');
+  if(saveWaBtn) saveWaBtn.addEventListener('click', async ()=>{
+    const num = document.getElementById('owner-whatsapp').value.trim();
+    const msg = document.getElementById('wa-msg');
+    saveWaBtn.disabled = true;
+    try{
+      await saveSetting('owner_whatsapp', num);
+      msg.style.color = 'var(--done)';
+      msg.textContent = 'Na-save!';
+    }catch(e){
+      msg.style.color = 'var(--very-high)';
+      msg.textContent = 'Hindi na-save. Subukan ulit.';
+      console.error(e);
+    }
+    saveWaBtn.disabled = false;
+  });
+
+  // Admin: change own PIN
+  const changePinBtn = document.getElementById('btn-change-pin');
+  if(changePinBtn) changePinBtn.addEventListener('click', async ()=>{
+    const oldPin = document.getElementById('pin-old').value.trim();
+    const newPin = document.getElementById('pin-new').value.trim();
+    const confirmPin = document.getElementById('pin-confirm').value.trim();
+    const msg = document.getElementById('pin-msg');
+    msg.style.color = 'var(--very-high)';
+    if(!oldPin || !newPin || !confirmPin){ msg.textContent = 'Kumpletuhin ang lahat ng field.'; return; }
+    if(!/^(?=.*[A-Za-z])(?=.*[0-9])[A-Za-z0-9]{6}$/.test(newPin)){ msg.textContent = 'Dapat 6 characters na may letra at numero (hal. ab12cd).'; return; }
+    if(newPin !== confirmPin){ msg.textContent = 'Hindi tugma ang bagong PIN.'; return; }
+    changePinBtn.disabled = true;
+    try{
+      const {data, error} = await sb.rpc('change_staff_pin', {p_id: session.id, p_old_pin: oldPin, p_new_pin: newPin});
+      if(error) throw error;
+      if(data){
+        msg.style.color = 'var(--done)';
+        msg.textContent = 'Na-update ang PIN mo!';
+        document.getElementById('pin-old').value = '';
+        document.getElementById('pin-new').value = '';
+        document.getElementById('pin-confirm').value = '';
+      }else{
+        msg.textContent = 'Mali ang kasalukuyang PIN.';
+      }
+    }catch(e){
+      msg.textContent = 'Connection error. Subukan ulit.';
+      console.error(e);
+    }
+    changePinBtn.disabled = false;
+  });
+
+  // Admin: add task
+  const addTaskBtn = document.getElementById('btn-add-task');
+  if(addTaskBtn) addTaskBtn.addEventListener('click', ()=>{
+    const text = document.getElementById('new-task-text').value.trim();
+    const priority = document.getElementById('new-task-priority').value;
+    const time = document.getElementById('new-task-time').value;
+    if(!text){ alert('Maglagay ng pangalan ng task.'); return; }
+    const tasks = getTasks();
+    tasks.push({id:'t'+Date.now(), text, priority, time, active:true, order:tasks.length});
+    setTasks(tasks);
+    render();
+  });
+
+  // Admin: edit/delete task
+  document.querySelectorAll('[data-action="edit-task"]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      adminEditingTaskId = el.dataset.task;
+      render();
+    });
+  });
+  document.querySelectorAll('[data-action="cancel-edit"]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      adminEditingTaskId = null;
+      render();
+    });
+  });
+  document.querySelectorAll('[data-action="save-task"]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const tasks = getTasks();
+      const t = tasks.find(x=>x.id===el.dataset.task);
+      const newText = document.getElementById('edit-task-text').value.trim();
+      if(!newText){ alert('Hindi pwedeng walang pangalan ang task.'); return; }
+      t.text = newText;
+      t.priority = document.getElementById('edit-task-priority').value;
+      t.time = document.getElementById('edit-task-time').value;
+      t.active = document.getElementById('edit-task-active').checked;
+      setTasks(tasks);
+      adminEditingTaskId = null;
+      render();
+    });
+  });
+  document.querySelectorAll('[data-action="delete-task"]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      if(!confirm('Tanggalin ang task na ito?')) return;
+      let tasks = getTasks().filter(x=>x.id!==el.dataset.task);
+      setTasks(tasks);
+      const state = getTaskState();
+      delete state[el.dataset.task];
+      setTaskState(state);
+      render();
+    });
+  });
+
+  // Admin: add staff
+  const addStaffBtn = document.getElementById('btn-add-staff');
+  if(addStaffBtn) addStaffBtn.addEventListener('click', async ()=>{
+    const name = document.getElementById('new-staff-name').value.trim();
+    const pin = document.getElementById('new-staff-pin').value.trim();
+    if(!name || !pin){ alert('Kumpletuhin ang pangalan at passcode.'); return; }
+    if(!/^(?=.*[A-Za-z])(?=.*[0-9])[A-Za-z0-9]{6}$/.test(pin)){
+      alert('Ang passcode ay dapat eksaktong 6 characters, may kahit 1 letra at 1 numero (hal. ab12cd).'); return;
+    }
+    try{
+      const {error} = await sb.rpc('admin_add_staff', {p_name: name, p_pin: pin});
+      if(error) throw error;
+      const {data} = await sb.rpc('get_staff_list');
+      if(data) cache.staff = data;
+      render();
+    }catch(e){
+      alert('Hindi na-save ang staff. Tiyaking tama ang passcode format.');
+      console.error(e);
+    }
+  });
+  document.querySelectorAll('[data-action="delete-staff"]').forEach(el=>{
+    el.addEventListener('click', async ()=>{
+      if(!confirm('Tanggalin ang staff na ito?')) return;
+      try{
+        const {error} = await sb.rpc('admin_delete_staff', {p_id: el.dataset.staff});
+        if(error) throw error;
+        const {data} = await sb.rpc('get_staff_list');
+        if(data) cache.staff = data;
+        render();
+      }catch(e){
+        alert('Hindi na-tanggal ang staff. Subukan ulit.');
+        console.error(e);
+      }
+    });
+  });
+
+  // Admin: load locked staff list, then wire unlock buttons
+  const lockedBox = document.getElementById('locked-staff-list');
+  if(lockedBox){
+    (async()=>{
+      try{
+        const {data, error} = await sb.rpc('get_locked_staff');
+        if(error) throw error;
+        if(!data || !data.length){ lockedBox.innerHTML = `<p class="hint">Walang naka-lock na staff.</p>`; return; }
+        lockedBox.innerHTML = data.map(s=>{
+          const why = s.locked_forever ? 'Permanente (5 maling subok)' : ('Hanggang '+(s.locked_until?new Date(s.locked_until).toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'}):''));
+          return `<div class="admin-task-row"><div class="top">
+            <span>${escapeHtml(s.name)} — <span style="color:var(--very-high)">${why}</span></span>
+            <button class="btn-small btn-primary" data-unlock="${s.staff_id}">Unlock</button>
+          </div></div>`;
+        }).join('');
+        lockedBox.querySelectorAll('[data-unlock]').forEach(btn=>{
+          btn.addEventListener('click', async ()=>{
+            const ownerPin = prompt('Ilagay ang Owner PIN para i-unlock:');
+            if(!ownerPin) return;
+            try{
+              const {data:ok, error:e2} = await sb.rpc('admin_unlock_staff', {p_owner_pin: ownerPin, p_target_id: btn.dataset.unlock});
+              if(e2) throw e2;
+              if(ok){ alert('Na-unlock na!'); render(); }
+              else alert('Maling Owner PIN.');
+            }catch(err){ alert('Hindi na-unlock. Subukan ulit.'); console.error(err); }
+          });
+        });
+      }catch(e){ lockedBox.innerHTML = `<p class="hint">Hindi ma-load ang listahan.</p>`; console.error(e); }
+    })();
+  }
+}
+
+/* ============================================================
+   UTILITIES MONITOR MODULE
+   (data in Supabase table 'util_entries' + 'util_settings';
+    falls back to localStorage if offline)
+============================================================ */
+const DEFAULT_METERS = [
+  {id:'main_water', name:'Main Water', enabled:true},
+  {id:'common_water', name:'Common Water (CW)', enabled:true},
+  {id:'water7', name:'7 Water', enabled:true},
+  {id:'water5', name:'5 Water', enabled:true},
+  {id:'elec7', name:'7 Electricity', enabled:true},
+  {id:'elec5', name:'5 Electricity', enabled:true},
+  {id:'gas', name:'Gas', enabled:true}
+];
+// Live meter config (loaded from app_settings 'util_meters'); starts as default.
+let METER_CONFIG = JSON.parse(JSON.stringify(DEFAULT_METERS));
+// METERS = only the ENABLED meters (used by staff entry, limits, alerts).
+// Use getAllMeters() when you need every meter incl. disabled (e.g. history/CSV).
+function getMeters(){ return METER_CONFIG.filter(m=>m.enabled!==false); }
+function getAllMeters(){ return METER_CONFIG; }
+Object.defineProperty(window, 'METERS', { get(){ return getMeters(); } });
+const DEFAULT_UTIL_LIMITS = {
+  opening: {main_water:0.8, common_water:0.7, water7:0.5, water5:0.7, elec7:null, elec5:null, gas:1.0},
+  closing: {main_water:0.5, common_water:0.4, water7:0.3, water5:0.5, elec7:null, elec5:null, gas:1.0}
+};
+const DEFAULT_UTIL_SETTINGS_PW = '9999';
+
+let utilCache = { entries: [], limits: JSON.parse(JSON.stringify(DEFAULT_UTIL_LIMITS)), settingsPw: DEFAULT_UTIL_SETTINGS_PW };
+let utilTab = 'entry';
+let utilShift = (new Date().getHours() < 15) ? 'opening' : 'closing';
+let utilDraft = {};
+let utilNote = '';
+let utilSettingsOpen = false;
+let utilChartRefs = {};
+
+function utilRound3(n){ return Math.round(n*1000)/1000; }
+function utilTodayKey(){ return new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Manila'}); }
+function utilNowTime(){ return new Date().toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Manila'}); }
+function utilLastReading(meterId){
+  const es = utilCache.entries.filter(e=>e.readings && e.readings[meterId]!=null).slice().sort((a,b)=>b.ts-a.ts);
+  return es.length ? {value:es[0].readings[meterId], date:es[0].date, shift:es[0].shift} : null;
+}
+function utilEntryExists(date, shift){ return utilCache.entries.some(e=>e.date===date && e.shift===shift); }
+
+async function utilLoadData(){
+  try{
+    const [entriesRes, settingsRes] = await Promise.all([
+      sb.from('util_entries').select('*').order('ts',{ascending:true}),
+      sb.from('app_settings').select('*').in('key',['util_limits','util_settings_pw','util_meters'])
+    ]);
+    if(entriesRes.data){
+      utilCache.entries = entriesRes.data.map(r=>({
+        date:r.date, shift:r.shift, staff:r.staff, readings:r.readings, usage:r.usage,
+        exceeded:r.exceeded||[], negatives:r.negatives||[], note:r.note||'', time:r.time, ts:Number(r.ts)
+      }));
+    }
+    (settingsRes.data||[]).forEach(r=>{
+      if(r.key==='util_limits' && r.value){ try{ utilCache.limits = JSON.parse(r.value); }catch(e){} }
+      if(r.key==='util_settings_pw' && r.value){ utilCache.settingsPw = r.value; }
+      if(r.key==='util_meters' && r.value){ try{ const m=JSON.parse(r.value); if(Array.isArray(m)&&m.length) METER_CONFIG=m; }catch(e){} }
+    });
+  }catch(err){ console.error('utilLoadData', err); }
+}
+async function utilSaveEntry(entry){
+  utilCache.entries.push(entry);
+  // fold the why/action explanation into the note field so it persists & shows in logs/alerts
+  let noteFull = entry.note || '';
+  if(entry.exceedWhy){ noteFull += (noteFull?' | ':'') + 'BAKIT LUMAGPAS: ' + entry.exceedWhy; }
+  if(entry.exceedAction){ noteFull += (noteFull?' | ':'') + 'GINAWA: ' + entry.exceedAction; }
+  const {error} = await sb.from('util_entries').insert({
+    date:entry.date, shift:entry.shift, staff:entry.staff, readings:entry.readings, usage:entry.usage,
+    exceeded:entry.exceeded, negatives:entry.negatives, note:noteFull, time:entry.time, ts:entry.ts
+  });
+  if(error) console.error('utilSaveEntry', error);
+}
+async function utilSaveLimits(){
+  const {error} = await sb.from('app_settings').upsert({key:'util_limits', value:JSON.stringify(utilCache.limits)});
+  if(error) console.error('utilSaveLimits', error);
+}
+async function utilSaveSettingsPw(pw){
+  utilCache.settingsPw = pw;
+  await sb.from('app_settings').upsert({key:'util_settings_pw', value:pw});
+}
+async function utilDeleteEntries(filterFn){
+  const toDelete = utilCache.entries.filter(filterFn);
+  utilCache.entries = utilCache.entries.filter(e=>!filterFn(e));
+  for(const e of toDelete){ await sb.from('util_entries').delete().eq('ts', e.ts); }
+}
+
+/* ----- Utilities WhatsApp ----- */
+function utilBuildAlertMessage(entry){
+  const sh = entry.shift==='opening'?'Opening (AM)':'Closing (PM)';
+  let msg=`*⚠ UTILITIES ALERT*\n${entry.date} ${sh}\nStaff: ${entry.staff}\n\n`;
+  if(entry.exceeded && entry.exceeded.length){
+    msg+=`*LAGPAS SA LIMIT:*\n`;
+    entry.exceeded.forEach(id=>{const m=METERS.find(x=>x.id===id);msg+=`  ${m.name.replace(' (CW)','')}: ${entry.usage[id]} (limit ${utilCache.limits[entry.shift][id]})\n`;});
+    msg+='\n';
+  }
+  if(entry.negatives && entry.negatives.length){
+    msg+=`*NEGATIVE READING (baka mali/na-reset):*\n`;
+    entry.negatives.forEach(id=>{const m=METERS.find(x=>x.id===id);msg+=`  ${m.name.replace(' (CW)','')}: ${entry.usage[id]} (ngayon ${entry.readings[id]})\n`;});
+    msg+='\n';
+  }
+  if(entry.note) msg+=`Note: ${entry.note}`;
+  return msg;
+}
+function utilBuildMonthMessage(){
+  const ym=utilTodayKey().slice(0,7);
+  const es=utilCache.entries.filter(e=>e.date.startsWith(ym)).slice().sort((a,b)=>a.ts-b.ts);
+  let msg=`*UTILITIES — ${ym}*\n\n`;
+  if(!es.length) return msg+'Walang record ngayong buwan.';
+  es.forEach(e=>{
+    msg+=`${e.date} ${e.shift==='opening'?'AM':'PM'} (${e.staff}):\n`;
+    METERS.forEach(m=>{ if(e.usage && e.usage[m.id]!=null){ const ov=e.exceeded&&e.exceeded.includes(m.id); const ng=e.negatives&&e.negatives.includes(m.id); msg+=`  ${m.name.replace(' (CW)','')}: ${e.usage[m.id]}${ov?' ⚠LAGPAS':''}${ng?' ⚠NEGATIVE':''}\n`; } });
+    if(e.note) msg+=`  Note: ${e.note}\n`;
+    msg+='\n';
+  });
+  return msg;
+}
+function utilOpenWa(msg){
+  const num=formatPhoneForWa(cache.settings.owner_whatsapp);
+  window.open((num?`https://wa.me/${num}`:'https://wa.me/')+`?text=${encodeURIComponent(msg)}`,'_blank');
+}
+function utilDownloadCSV(){
+  const es=utilCache.entries.slice().sort((a,b)=>a.ts-b.ts);
+  const header=['Date','Shift','Staff',...METERS.map(m=>m.name.replace(' (CW)','')+' reading'),...METERS.map(m=>m.name.replace(' (CW)','')+' usage'),'Exceeded','Negative','Note'];
+  const rows=es.map(e=>[e.date,e.shift,e.staff,
+    ...METERS.map(m=>e.readings[m.id]??''),...METERS.map(m=>e.usage[m.id]??''),
+    (e.exceeded||[]).join('|'),(e.negatives||[]).join('|'),(e.note||'').replace(/,/g,';')]);
+  const csv=[header,...rows].map(r=>r.join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`utilities_${utilTodayKey()}.csv`;a.click();
+}
+
+/* ----- Utilities render ----- */
+function renderUtilities(){
+  const tabs=(id,label)=>`<button class="${utilTab===id?'active':''}" data-util-tab="${id}">${label}</button>`;
+  let body='';
+  if(utilTab==='entry') body=renderUtilEntry();
+  else if(utilTab==='log') body=renderUtilLog();
+  else if(utilTab==='trends') body=renderUtilTrends();
+  else if(utilTab==='settings') body=renderUtilSettings();
+  return `<div class="screen">
+    <div class="util-tabs">${tabs('entry','Entry')}${tabs('log','Log')}${tabs('trends','Trends')}${tabs('settings','Settings')}</div>
+    ${body}
+  </div>`;
+}
+function renderUtilEntry(){
+  const limits=utilCache.limits[utilShift];
+  const date=utilTodayKey();
+  const shiftLabel=utilShift==='opening'?'☀️ OPENING (Umaga)':'🌙 CLOSING (Gabi)';
+  const otherShift=utilShift==='opening'?'closing':'opening';
+  const otherLabel=utilShift==='opening'?'🌙 Closing (Gabi)':'☀️ Opening (Umaga)';
+  const bar=`<div class="shift-label">${shiftLabel}</div><div class="shift-switch" data-util-switch="${otherShift}">Lumipat sa ${otherLabel} →</div>`;
+  if(utilEntryExists(date,utilShift)){
+    const e=utilCache.entries.find(x=>x.date===date&&x.shift===utilShift);
+    return `${bar}<div class="util-locked"><div class="big">✓ Tapos na ang ${utilShift==='opening'?'Opening':'Closing'} ngayong araw</div>
+      <p style="font-size:13px;color:var(--ink-soft)">Ni ${escapeHtml(e.staff)} sa ${e.time||''}. Pwede ulit bukas.</p></div>`;
+  }
+  const cards=METERS.map(m=>{
+    const prev=utilLastReading(m.id); const prevVal=prev?prev.value:null;
+    const cur=utilDraft[m.id]!==undefined?utilDraft[m.id]:''; const lim=limits[m.id];
+    return `<div class="meter-card" id="ucard-${m.id}">
+      <div class="mc-top"><span class="mc-name">${m.name}</span><span class="limit-pill">${lim!=null?('limit '+lim):'no limit'}</span></div>
+      <div class="mc-prev">Huling reading: ${prevVal!=null?prevVal+' ('+prev.date+' '+prev.shift+')':'— wala pa, baseline'}</div>
+      <div style="margin-top:7px;"><div class="field-label">Meter Reading Ngayon</div>
+      <input type="text" inputmode="decimal" data-umeter="${m.id}" value="${cur}" placeholder="hal. 123.4"></div>
+      <div class="mc-usage" id="uusage-${m.id}"></div>
+    </div>`;
+  }).join('');
+  return `${bar}
+    <div class="util-alert" id="ualert" style="display:none;"><div class="a-title"></div><div class="a-list"></div></div>
+    ${cards}
+    <div class="field-label" style="margin-top:6px;">Notes (optional)</div>
+    <input type="text" id="unote" value="${escapeHtml(utilNote)}" placeholder="hal. may tagas sa gripo">
+    <button class="btn-primary btn-block" id="btn-usave" style="margin-top:6px;">I-save ang Reading</button>`;
+}
+function updateUtilPreview(){
+  const limits=utilCache.limits[utilShift]; let over=false,neg=false;
+  METERS.forEach(m=>{
+    const card=document.getElementById('ucard-'+m.id); const ue=document.getElementById('uusage-'+m.id);
+    if(!card||!ue) return;
+    const prev=utilLastReading(m.id); const raw=utilDraft[m.id]; const cur=parseFloat(raw); const lim=limits[m.id];
+    if(prev && raw!==undefined && raw!=='' && !isNaN(cur)){
+      const u=utilRound3(cur-prev.value); const isNeg=u<0; const isOver=!isNeg&&lim!=null&&u>lim;
+      if(isOver)over=true; if(isNeg)neg=true;
+      card.classList.toggle('exceeded', isOver||isNeg);
+      ue.className='mc-usage'+((isOver||isNeg)?' over':'');
+      ue.innerHTML= isNeg?`Usage: <b>${u}</b> ⚠ NEGATIVE! (mas mababa sa huling reading)`:(`Usage: <b>${u}</b>`+(lim!=null?(isOver?' ⚠ LAGPAS SA LIMIT!':' ✓ ok'):''));
+    }else{ card.classList.remove('exceeded'); ue.innerHTML=''; }
+  });
+  const al=document.getElementById('ualert');
+  if(al){ if(over||neg){ al.style.display='block';
+      al.querySelector('.a-title').textContent = (over&&neg)?'⚠ LAGPAS / NEGATIVE!':(neg?'⚠ NEGATIVE READING!':'⚠ LAGPAS SA USAGE!');
+      al.querySelector('.a-list').textContent = 'Tingnan ang mga pulang card sa ibaba.';
+    } else al.style.display='none'; }
+}
+function renderUtilLog(){
+  const es=utilCache.entries.slice().sort((a,b)=>b.ts-a.ts);
+  if(!es.length) return `<div class="util-locked"><div class="big" style="color:var(--ink-soft)">Wala pang record</div></div>`;
+  const head=`<tr><th>Date</th><th>Sh</th><th>Staff</th>${METERS.map(m=>`<th>${m.name.replace(' (CW)','').replace(' ','')}</th>`).join('')}<th>Note</th></tr>`;
+  const rows=es.map(e=>{
+    const cells=METERS.map(m=>{const u=e.usage&&e.usage[m.id]!=null?e.usage[m.id]:'';const ov=(e.exceeded&&e.exceeded.includes(m.id))||(e.negatives&&e.negatives.includes(m.id));return `<td class="${ov?'over':''}">${u}</td>`;}).join('');
+    return `<tr><td>${e.date.slice(5)}</td><td>${e.shift==='opening'?'AM':'PM'}</td><td>${escapeHtml(e.staff)}</td>${cells}<td>${escapeHtml(e.note||'')}</td></tr>`;
+  }).join('');
+  return `<p class="hint" style="font-size:11px;color:var(--ink-soft)">Usage = ngayon − huli. Pula = lagpas o negative.</p>
+    <div class="util-table-wrap"><table>${head}${rows}</table></div>
+    <div class="btn-row" style="margin-top:14px;">
+      <button class="btn-ghost" id="btn-ucsv">⬇ CSV</button>
+      <button class="btn-wa" id="btn-uwa">📲 Buwan sa WhatsApp</button>
+    </div>`;
+}
+function renderUtilTrends(){
+  return `<div class="chart-box"><h4>💧 Water Usage</h4><canvas id="uchart-water" height="160"></canvas></div>
+    <div class="chart-box"><h4>⚡ Electricity Usage</h4><canvas id="uchart-elec" height="160"></canvas></div>
+    <div class="chart-box"><h4>🔥 Gas Usage</h4><canvas id="uchart-gas" height="160"></canvas></div>`;
+}
+function drawUtilCharts(){
+  const es=utilCache.entries.slice().sort((a,b)=>a.ts-b.ts).slice(-14);
+  const labels=es.map(e=>`${e.date.slice(5)} ${e.shift==='opening'?'AM':'PM'}`);
+  const series=(ids,colors)=>ids.map((id,i)=>({label:METERS.find(m=>m.id===id).name.replace(' (CW)',''),data:es.map(e=>e.usage&&e.usage[id]!=null?e.usage[id]:null),borderColor:colors[i],backgroundColor:colors[i],tension:.3,spanGaps:true}));
+  const mk=(cid,ds)=>{const el=document.getElementById(cid);if(!el)return;if(utilChartRefs[cid])utilChartRefs[cid].destroy();utilChartRefs[cid]=new Chart(el,{type:'line',data:{labels,datasets:ds},options:{responsive:true,plugins:{legend:{labels:{font:{family:'Space Mono',size:10}}}},scales:{x:{ticks:{font:{size:9}}},y:{beginAtZero:true,ticks:{font:{size:9}}}}}});};
+  mk('uchart-water',series(['main_water','common_water','water7','water5'],['#2E6FB0','#5BA3D6','#7FB77E','#C99A2E']));
+  mk('uchart-elec',series(['elec7','elec5'],['#C1432E','#E0883B']));
+  mk('uchart-gas',series(['gas'],['#9B5FA0']));
+}
+function renderUtilSettings(){
+  if(session.role!=='owner' && !utilSettingsOpen){
+    return `<div class="util-locked"><div class="big" style="color:var(--ink-soft)">Settings</div>
+      <div class="field-label" style="margin-top:10px;">Owner PIN</div>
+      <input type="password" id="uset-pw" inputmode="numeric" placeholder="••••">
+      <button class="btn-primary btn-block" id="btn-uset-unlock">I-unlock</button>
+      <div class="msg" id="uset-err" style="color:var(--very-high);font-size:12px;"></div></div>`;
+  }
+  const limits=utilCache.limits;
+  const cells=(sh)=>METERS.map(m=>`<div class="lg-cell"><div class="field-label">${m.name.replace(' (CW)','')}</div>
+    <input type="number" step="0.01" inputmode="decimal" data-ulim="${sh}:${m.id}" value="${limits[sh][m.id]!=null?limits[sh][m.id]:''}" placeholder="none"></div>`).join('');
+  return `<div class="section-title">🔧 Mga Metro (Meters)</div>
+    <p class="hint">I-uncheck ang metro na hindi pa ginagamit — hindi ito makikita ng staff. Pwede ring magdagdag.</p>
+    <div id="meter-config">${getAllMeters().map((m,i)=>`<label class="toggle" style="justify-content:space-between;"><span>${escapeHtml(m.name)}</span>
+      <input type="checkbox" data-meter-on="${m.id}" ${m.enabled!==false?'checked':''} style="width:auto;"></label>`).join('')}</div>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <input type="text" id="new-meter-name" placeholder="Pangalan ng bagong metro" style="margin:0;">
+      <button class="btn-ghost btn-small" id="btn-add-meter">+ Dagdag</button>
+    </div>
+    <button class="btn-primary btn-block" id="btn-save-meters" style="margin-top:10px;">I-save ang Mga Metro</button>
+    <div class="msg" id="meter-msg" style="font-size:12px;margin-top:6px;"></div>
+
+    <div class="section-title">☀️ Opening Limits (AM)</div><div class="limit-grid">${cells('opening')}</div>
+    <div class="section-title">🌙 Closing Limits (PM)</div><div class="limit-grid">${cells('closing')}</div>
+    <button class="btn-primary btn-block" id="btn-usave-limits" style="margin-top:14px;">I-save ang Limits</button>
+    <p class="hint">Para palitan ang password, gamitin ang "Palitan ang PIN Mo" sa Admin Panel — iisa lang ang password (Owner PIN).</p>
+    <div class="section-title">🗑 Data / Testing</div>
+    <div class="btn-row" style="margin-bottom:8px;">
+      <button class="btn-ghost btn-small" id="btn-udel-open">Burahin Opening Ngayon</button>
+      <button class="btn-ghost btn-small" id="btn-udel-close">Burahin Closing Ngayon</button>
+    </div>
+    <button class="btn-danger btn-block" id="btn-udel-all">Burahin LAHAT ng Records</button>
+    <div class="msg" id="uset-msg" style="color:var(--done);font-size:12px;margin-top:8px;"></div>`;
+}
+
+function bindUtilities(){
+  document.querySelectorAll('[data-util-tab]').forEach(el=>el.addEventListener('click',()=>{utilTab=el.dataset.utilTab;render();}));
+  document.querySelectorAll('[data-util-switch]').forEach(el=>el.addEventListener('click',()=>{utilShift=el.dataset.utilSwitch;utilDraft={};render();}));
+  document.querySelectorAll('[data-umeter]').forEach(el=>el.addEventListener('input',()=>{utilDraft[el.dataset.umeter]=el.value;updateUtilPreview();}));
+  const un=document.getElementById('unote'); if(un) un.addEventListener('input',()=>{utilNote=un.value;});
+  if(utilTab==='entry') updateUtilPreview();
+  if(utilTab==='trends') setTimeout(drawUtilCharts,50);
+
+  const usave=document.getElementById('btn-usave');
+  if(usave) usave.addEventListener('click',async()=>{
+    const date=utilTodayKey();
+    if(utilEntryExists(date,utilShift)){ alert('Naka-lock na ang shift na ito ngayong araw.'); render(); return; }
+    const limits=utilCache.limits[utilShift];
+    const readings={},usage={},exceeded=[],negatives=[];const missing=[];
+    for(const m of METERS){
+      const raw=utilDraft[m.id];
+      if(raw===undefined||String(raw).trim()===''){ missing.push(m.name.replace(' (CW)','')); continue; }
+      const val=parseFloat(raw); if(isNaN(val)){ missing.push(m.name.replace(' (CW)','')); continue; }
+      readings[m.id]=val; const prev=utilLastReading(m.id);
+      if(prev){ const u=utilRound3(val-prev.value); usage[m.id]=u; if(u<0)negatives.push(m.id); else if(limits[m.id]!=null&&u>limits[m.id])exceeded.push(m.id); }
+      else usage[m.id]=null;
+    }
+    if(missing.length){ alert('Kulang/mali ang readings para sa:\n\n• '+missing.join('\n• ')); return; }
+
+    // If anything exceeded the limit or went negative, require an explanation
+    let explain = {};
+    if(exceeded.length || negatives.length){
+      const flagged = [...exceeded, ...negatives];
+      const names = flagged.map(id=>METERS.find(m=>m.id===id).name.replace(' (CW)','')).join(', ');
+      const why = prompt('LAGPAS/NEGATIVE: '+names+'\n\nBakit lumagpas o naging negative? (required)');
+      if(why===null || why.trim()===''){ alert('Kailangan ilagay kung bakit lumagpas bago i-save.'); return; }
+      const action = prompt('Anong ginawa/aksyon mo? (required)');
+      if(action===null || action.trim()===''){ alert('Kailangan ilagay kung anong ginawa bago i-save.'); return; }
+      explain = {why: why.trim(), action: action.trim()};
+    }
+
+    const entry={date,shift:utilShift,staff:session.name,readings,usage,exceeded,negatives,note:utilNote.trim(),exceedWhy:explain.why||null,exceedAction:explain.action||null,time:utilNowTime(),ts:Date.now()};
+    usave.disabled=true;
+    await utilSaveEntry(entry);
+    utilDraft={};utilNote='';
+    alert('✓ Na-save ang readings!');
+    render();
+  });
+
+  const ucsv=document.getElementById('btn-ucsv'); if(ucsv) ucsv.addEventListener('click',utilDownloadCSV);
+  const uwa=document.getElementById('btn-uwa'); if(uwa) uwa.addEventListener('click',()=>utilOpenWa(utilBuildMonthMessage()));
+
+  const usetUnlock=document.getElementById('btn-uset-unlock');
+  if(usetUnlock) usetUnlock.addEventListener('click',async()=>{
+    const val=document.getElementById('uset-pw').value.trim();
+    try{
+      const {data,error}=await sb.rpc('login_staff',{p_id:'owner',p_pin:val});
+      if(error) throw error;
+      const r = data && data.length ? data[0] : null;
+      if(r && r.status==='ok'){ utilSettingsOpen=true; render(); }
+      else document.getElementById('uset-err').textContent='Maling password.';
+    }catch(e){ document.getElementById('uset-err').textContent='Walang connection.'; console.error(e); }
+  });
+  const usaveLimits=document.getElementById('btn-usave-limits');
+  if(usaveLimits) usaveLimits.addEventListener('click',async()=>{
+    document.querySelectorAll('[data-ulim]').forEach(el=>{const [sh,id]=el.dataset.ulim.split(':');const v=el.value.trim();utilCache.limits[sh][id]=v===''?null:parseFloat(v);});
+    await utilSaveLimits(); const m=document.getElementById('uset-msg'); if(m)m.textContent='Na-save ang limits!';
+  });
+  const udelOpen=document.getElementById('btn-udel-open');
+  if(udelOpen) udelOpen.addEventListener('click',async()=>{const d=utilTodayKey();await utilDeleteEntries(e=>e.date===d&&e.shift==='opening');render();});
+  const udelClose=document.getElementById('btn-udel-close');
+  if(udelClose) udelClose.addEventListener('click',async()=>{const d=utilTodayKey();await utilDeleteEntries(e=>e.date===d&&e.shift==='closing');render();});
+  const udelAll=document.getElementById('btn-udel-all');
+  if(udelAll) udelAll.addEventListener('click',async()=>{if(!confirm('Buburahin LAHAT ng records?'))return;await utilDeleteEntries(()=>true);render();});
+
+  // Meters: add new
+  const addMeter=document.getElementById('btn-add-meter');
+  if(addMeter) addMeter.addEventListener('click',()=>{
+    const name=document.getElementById('new-meter-name').value.trim();
+    if(!name){ const m=document.getElementById('meter-msg'); if(m){m.style.color='var(--very-high)';m.textContent='Maglagay ng pangalan.';} return; }
+    const id='m_'+Date.now();
+    METER_CONFIG.push({id, name, enabled:true});
+    // ensure limit slots exist
+    utilCache.limits.opening[id]=null; utilCache.limits.closing[id]=null;
+    render();
+  });
+  // Meters: save (enabled flags + config)
+  const saveMeters=document.getElementById('btn-save-meters');
+  if(saveMeters) saveMeters.addEventListener('click',async()=>{
+    document.querySelectorAll('[data-meter-on]').forEach(el=>{
+      const m=METER_CONFIG.find(x=>x.id===el.dataset.meterOn); if(m) m.enabled=el.checked;
+    });
+    const msg=document.getElementById('meter-msg');
+    try{
+      await sb.from('app_settings').upsert({key:'util_meters', value:JSON.stringify(METER_CONFIG)});
+      await utilSaveLimits();
+      if(msg){ msg.style.color='var(--done)'; msg.textContent='Na-save ang mga metro!'; }
+      render();
+    }catch(e){ if(msg){ msg.style.color='var(--very-high)'; msg.textContent='Hindi na-save.'; } console.error(e); }
+  });
+}
+
+
+
+
+/* ============================================================
+   PHASE A — MAINTENANCE + EMPLOYEE HUB (Supabase-backed)
+============================================================ */
+const STAFF_FOR_LEAVE = [];  // filled from cache.staff at render time
+const WEEKDAYS_TL = ['Linggo','Lunes','Martes','Miyerkules','Huwebes','Biyernes','Sabado'];
+
+let maintTab = 'home';            // home | maint | leave | settings
+let activeMaintId = null;
+let editingMaintId = null;
+let addingMaint = false;
+let leaveProofNote = null;        // Phase B placeholder
+
+function maintTodayKey(){ return new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Manila'}); }
+function maintNowTime(){ return new Date().toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Manila'}); }
+function maintAddDays(dStr,n){ const d=new Date(dStr+'T00:00:00'); d.setDate(d.getDate()+n); return d.toLocaleDateString('en-CA'); }
+function maintLastMonday(y,m){ const d=new Date(y,m+1,0); while(d.getDay()!==1)d.setDate(d.getDate()-1); return d; }
+function maintComputeDue(t){
+  const today=new Date(maintTodayKey()+'T00:00:00');
+  if(t.sched_type==='weekly'){ const diff=(today.getDay()-t.weekday+7)%7; const due=new Date(today); due.setDate(today.getDate()-diff); return {dueDate:due.toLocaleDateString('en-CA'),label:`${WEEKDAYS_TL[t.weekday]} ${t.time}`}; }
+  if(t.sched_type==='quarterly_last_monday'){ const lm=maintLastMonday(today.getFullYear(),today.getMonth()); return {dueDate:lm.toLocaleDateString('en-CA'),label:`Last Monday ${t.time} (every 3 months)`}; }
+  return {dueDate:maintTodayKey(),label:''};
+}
+
+/* ---- Supabase load + save ---- */
+async function loadPhaseA(){
+  try{
+    const [tRes, sRes, lRes, cRes] = await Promise.all([
+      sb.from('maint_tasks').select('*').order('sort_order'),
+      sb.from('maint_state').select('*'),
+      sb.from('leave_requests').select('*').order('created_at',{ascending:false}).limit(200),
+      sb.from('leave_credits').select('*')
+    ]);
+    cache.maintTasks = (tRes.data||[]).map(r=>({id:r.id,name:r.name,active:r.active,sched_type:r.sched_type,weekday:r.weekday,time:r.time,photoSteps:r.photo_steps||[],sort_order:r.sort_order}));
+    const st={}; (sRes.data||[]).forEach(r=>{ st[r.task_id]={due_date:r.due_date,status:r.status,completed_by:r.completed_by,completed_at:r.completed_at,later_until:r.later_until?Number(r.later_until):null,later_count:r.later_count||0,postpones:r.postpones||0,postpone_reason:r.postpone_reason,postpone_until_date:r.postpone_until_date,captures:r.captures||{}}; });
+    cache.maintState = st;
+    cache.leaves = (lRes.data||[]).map(r=>({id:r.id,staff:r.staff,from:r.date_from,until:r.date_until,type:r.leave_type,reason:r.reason,proof:r.proof_url,status:r.status,managerBy:r.manager_by,managerNote:r.manager_note,ownerBy:r.owner_by,ownerNote:r.owner_note,filedDate:r.filed_date}));
+    cache.leaveCredits = {}; (cRes.data||[]).forEach(r=>{ cache.leaveCredits[r.staff]={annual_credits:Number(r.annual_credits), note:r.note}; });
+  }catch(e){ console.error('loadPhaseA',e); cache.maintTasks=cache.maintTasks||[]; cache.maintState=cache.maintState||{}; cache.leaves=cache.leaves||[]; cache.leaveCredits=cache.leaveCredits||{}; }
+}
+async function saveMaintTask(t){
+  const row={id:t.id,name:t.name,active:t.active,sched_type:t.sched_type,weekday:t.weekday,time:t.time,photo_steps:t.photoSteps,sort_order:t.sort_order||0};
+  const {error}=await sb.from('maint_tasks').upsert(row); if(error)console.error('saveMaintTask',error);
+}
+async function deleteMaintTask(id){ await sb.from('maint_tasks').delete().eq('id',id); }
+async function saveMaintState(taskId, st){
+  const row={task_id:taskId,due_date:st.due_date,status:st.status||null,completed_by:st.completed_by||null,completed_at:st.completed_at||null,later_until:st.later_until||null,later_count:st.later_count||0,postpones:st.postpones||0,postpone_reason:st.postpone_reason||null,postpone_until_date:st.postpone_until_date||null,captures:st.captures||{},updated_at:new Date().toISOString()};
+  const {error}=await sb.from('maint_state').upsert(row); if(error)console.error('saveMaintState',error);
+}
+async function saveLeave(lv){
+  const row={staff:lv.staff,date_from:lv.from,date_until:lv.until,leave_type:lv.type,reason:lv.reason,proof_url:lv.proof||null,status:lv.status,filed_date:lv.filedDate};
+  const {data,error}=await sb.from('leave_requests').insert(row).select(); if(error){console.error('saveLeave',error);return null;} return data&&data[0]?data[0].id:null;
+}
+async function updateLeaveDB(id, fields){
+  const {error}=await sb.from('leave_requests').update(fields).eq('id',id); if(error)console.error('updateLeaveDB',error);
+}
+
+/* ---- Blocking check (staff only) ---- */
+function getMaintBlocker(){
+  if(!session || session.role!=='staff') return null;
+  const today=maintTodayKey(); const ns=Date.now();
+  for(const t of (cache.maintTasks||[]).filter(x=>x.active)){
+    const due=maintComputeDue(t); const st=(cache.maintState||{})[t.id]||{};
+    if(st.status==='done'&&st.due_date===due.dueDate)continue;
+    if(today<due.dueDate)continue;
+    if(st.due_date===due.dueDate&&st.later_until&&ns<st.later_until)continue;
+    if(st.postpone_until_date&&today<st.postpone_until_date)continue;
+    return t;
+  }
+  return null;
+}
+
+/* ---- Renderers ---- */
+function renderMaintModule(){
+  const blocker = getMaintBlocker();
+  if(blocker && !activeMaintId && maintTab!=='leave' && maintTab!=='settings'){
+    return renderMaintBlocker(blocker);
+  }
+  if(activeMaintId){ const t=(cache.maintTasks||[]).find(x=>x.id===activeMaintId); if(t) return renderMaintDetail(t); activeMaintId=null; }
+  if(maintTab==='maint') return renderMaintList();
+  if(maintTab==='leave') return renderEmployeeHub();
+  if(maintTab==='settings') return renderMaintSettings();
+  return renderMaintList();
+}
+
+function renderMaintBlocker(t){
+  const due=maintComputeDue(t); const today=maintTodayKey(); const overdue=today>due.dueDate;
+  return `<div class="screen">
+    <div class="task-card ${overdue?'is-pending':''}" style="${overdue?'':'border-color:var(--high);'}">
+      <div class="task-top"><div class="task-text" style="font-weight:700;">${escapeHtml(t.name)}</div>
+      <span class="tag ${overdue?'very-high':'high'}">${overdue?'OVERDUE':'DUE'}</span></div>
+      <div style="font-size:12px;color:var(--ink-soft);margin-top:6px;">Kailangan munang asikasuhin ito.<br>Iskedyul: ${due.label} · Deadline: ${due.dueDate}</div>
+    </div>
+    <button class="btn-primary btn-block" data-mopen="${t.id}" style="margin-bottom:12px;">Simulan na</button>
+    <div class="field-label">O kaya, "Later" (gawin mamaya ngayong araw):</div>
+    <div class="btn-row"><button data-mlater="${t.id}|30">+30 min</button><button data-mlater="${t.id}|60">+1 oras</button><button data-mlater="${t.id}|120">+2 oras</button></div>
+    <p class="hint">Walang limit ang "Later", pero pag-abot ng 3 beses, aabisuhan ang owner.</p>
+    <button class="btn-ghost btn-block" data-go="select" style="margin-top:14px;">← Mga Module</button>
+  </div>`;
+}
+
+function renderMaintList(){
+  const tasks=(cache.maintTasks||[]).filter(t=>t.active); const today=maintTodayKey();
+  const back=`<button class="btn-ghost btn-small" data-go="select" style="margin-bottom:12px;">← Mga Module</button>`;
+  const setupBtn=(session && (session.role==='owner'||session.role==='manager'))
+    ? `<button class="btn-primary btn-block" data-mtab="settings" style="margin-bottom:12px;">⚙ Setup — Magdagdag / Mag-edit ng Tasks</button>` : '';
+  if(!tasks.length) return `<div class="screen">${back}${setupBtn}<div class="empty-note">Walang aktibong maintenance.</div></div>`;
+  const cards=tasks.map(t=>{
+    const due=maintComputeDue(t); const st=(cache.maintState||{})[t.id]||{};
+    const done=st.status==='done'&&st.due_date===due.dueDate; const started=today>=due.dueDate; const overdue=today>due.dueDate;
+    let tag,cls='';
+    if(done){tag=`<span class="tag low">✓ Tapos</span>`;cls='is-done';}
+    else if(!started){tag=`<span class="tag medium">Naka-iskedyul</span>`;}
+    else{tag=overdue?`<span class="tag very-high">OVERDUE</span>`:`<span class="tag high">DUE</span>`;cls='is-pending';}
+    return `<div class="task-card ${cls}">
+      <div class="task-top"><div class="task-text" style="font-weight:700;">${escapeHtml(t.name)}</div>${tag}</div>
+      <div style="font-size:11px;color:var(--ink-soft);margin-top:5px;">Iskedyul: ${due.label} · Deadline: ${due.dueDate}${done?`<br>✓ Ni ${escapeHtml(st.completed_by||'')} · ${st.completed_at||''}`:''}</div>
+      ${started&&!done?`<button class="btn-primary btn-block" data-mopen="${t.id}" style="margin-top:10px;">Buksan / Gawin</button>`:''}
+    </div>`;
+  }).join('');
+  return `<div class="screen">${back}${setupBtn}${cards}</div>`;
+}
+
+function renderMaintDetail(t){
+  const due=maintComputeDue(t); const st=(cache.maintState||{})[t.id]||{}; const caps=(st.due_date===due.dueDate)?(st.captures||{}):{};
+  const steps=t.photoSteps.map(ps=>{const c=caps[ps.id];return `<div class="task-card" style="padding:10px;margin-bottom:8px;${c&&!c.uploading?'border-color:var(--done);':''}">
+    <div style="font-size:12px;margin-bottom:6px;">📷 ${escapeHtml(ps.desc)}</div>
+    ${c?(c.uploading?`<div style="font-size:10.5px;color:var(--ink-soft);">⏳ Ina-upload ang litrato... maghintay sandali</div>`:`<div style="font-size:10.5px;color:var(--done);">✓ Kuha na · ${c.ts}${c.gps?(' · 📍'+c.gps):' · (walang GPS)'}</div>${c.url?`<a href="${c.url}" target="_blank" style="font-size:10.5px;">Tingnan ang litrato</a> · `:''}<button class="btn-ghost btn-small" data-mcap="${t.id}|${ps.id}" style="margin-top:5px;">Kunan ulit</button>`):`<button class="btn-ghost btn-small" data-mcap="${t.id}|${ps.id}">Kuha ng Litrato</button>`}
+  </div>`;}).join('');
+  const hasPhotos = t.photoSteps.length>0;
+  const allCap = !hasPhotos || t.photoSteps.every(ps=>caps[ps.id] && !caps[ps.id].uploading);
+  const pc=(st.due_date===due.dueDate)?(st.postpones||0):0; const lc=(st.due_date===due.dueDate)?(st.later_count||0):0;
+  return `<div class="screen">
+    <div class="task-top" style="margin-bottom:10px;"><div class="task-text" style="font-weight:700;">${escapeHtml(t.name)}</div><button class="btn-ghost btn-small" data-mback="1">← Bumalik</button></div>
+    <div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px;">Iskedyul: ${due.label} · Deadline: ${due.dueDate}</div>
+    ${steps}
+    ${!hasPhotos?`<div class="hint">Walang kailangang litrato sa task na ito. (Para magdagdag ng photo steps, pumunta sa Setup → Edit.)</div>`:''}
+    <button class="btn-primary btn-block ${allCap?'':'btn-ghost'}" data-mcomplete="${t.id}" ${allCap?'':'disabled'} style="margin-top:6px;">Tapos na</button>
+    ${hasPhotos&&!allCap?`<div class="hint">Kunan muna lahat ng litrato bago ma-tapos.</div>`:''}
+    <div class="field-label" style="margin-top:14px;">Later (mamaya ngayong araw) — ${lc} beses na:</div>
+    <div class="btn-row"><button class="btn-small" data-mlater="${t.id}|30">+30 min</button><button class="btn-small" data-mlater="${t.id}|60">+1 oras</button><button class="btn-small" data-mlater="${t.id}|120">+2 oras</button></div>
+    <button class="btn-ghost btn-block" data-mpostpone="${t.id}" style="margin-top:10px;">Bukas na lang (${pc}/2) — may dahilan</button>
+    ${pc>=2?`<div class="hint" style="color:var(--very-high)">⚠ Susunod na "Bukas" = aabisuhan ang owner.</div>`:''}
+  </div>`;
+}
+
+function renderEmployeeHub(){
+  const back=`<button class="btn-ghost btn-small" data-go="select" style="margin-bottom:12px;">← Mga Module</button>`;
+  const leaves=(cache.leaves||[]);
+  const staffNames=(cache.staff||[]).map(s=>s.name).filter(n=>n);
+  let form='';
+  if(session.role==='staff'){
+    const opts=staffNames.map(n=>`<option ${leaveForm2.staff===n?'selected':''}>${escapeHtml(n)}</option>`).join('');
+    form=`<div class="section-title">Employee Hub · Leave Request</div>
+      <div class="field-label">Pangalan <span style="color:var(--very-high)">*</span></div>
+      <select id="lv2-staff"><option value="">— pumili —</option>${opts}</select>
+      <div class="field-label">Leave mula <span style="color:var(--very-high)">*</span></div><input type="date" id="lv2-from" value="${leaveForm2.from}">
+      <div class="field-label">Hanggang <span style="color:var(--very-high)">*</span></div><input type="date" id="lv2-until" value="${leaveForm2.until}">
+      <div class="field-label">Uri <span style="color:var(--very-high)">*</span></div>
+      <select id="lv2-type"><option ${leaveForm2.type==='Annual Leave'?'selected':''}>Annual Leave</option><option ${leaveForm2.type==='Sick Leave'?'selected':''}>Sick Leave</option></select>
+      <div class="field-label">Dahilan <span style="color:var(--very-high)">*</span></div><textarea id="lv2-reason" placeholder="Dahilan ng leave" style="min-height:56px;">${escapeHtml(leaveForm2.reason)}</textarea>
+      <div class="hint">Proof / litrato: idadagdag sa Phase B (optional).</div>
+      <button class="btn-primary btn-block" id="btn-file-leave2" style="margin-top:10px;">I-submit ang Request</button>`;
+  }
+  const list=leaves.length?leaves.map(lv=>{
+    const badge=lv.status==='pending'?`<span class="status-badge status-pending">Hinihintay</span>`:lv.status==='manager_ok'?`<span class="status-badge status-mgr">Manager OK — hintay Owner</span>`:lv.status==='approved'?`<span class="status-badge status-approved">Approved</span>`:`<span class="status-badge status-declined">Declined</span>`;
+    let act='';
+    if(session.role==='manager'&&lv.status==='pending')act=`<div class="btn-row" style="margin-top:9px;"><button class="btn-small" style="background:var(--done);border-color:var(--done);color:#fff;" data-lv2="mgrok|${lv.id}">Approve</button><button class="btn-small" style="background:var(--very-high);border-color:var(--very-high);color:#fff;" data-lv2="mgrdecline|${lv.id}">Decline</button></div>`;
+    if(session.role==='owner'&&(lv.status==='pending'||lv.status==='manager_ok'))act=`<div class="btn-row" style="margin-top:9px;"><button class="btn-small" style="background:var(--done);border-color:var(--done);color:#fff;" data-lv2="ownerapprove|${lv.id}">Approve</button><button class="btn-small" style="background:var(--very-high);border-color:var(--very-high);color:#fff;" data-lv2="ownerdecline|${lv.id}">Decline</button></div>`;
+    const dateStr=lv.from===lv.until?lv.from:`${lv.from} → ${lv.until}`;
+    return `<div class="task-card"><div class="task-top"><div class="task-text" style="font-weight:700;font-size:13px;">${escapeHtml(lv.staff)}</div>${badge}</div>
+      <div style="font-size:11px;color:var(--ink-soft);margin-top:5px;">Leave: <b>${dateStr}</b> · ${lv.type}<br>Dahilan: ${escapeHtml(lv.reason)}<br>Filed: ${lv.filedDate||''}${lv.managerBy?`<br>Manager (${escapeHtml(lv.managerBy)}): ${escapeHtml(lv.managerNote||'')}`:''}${lv.ownerBy?`<br>Owner (${escapeHtml(lv.ownerBy)}): ${lv.status==='declined'?escapeHtml(lv.ownerNote||''):'Approved'}`:''}</div>${act}</div>`;
+  }).join(''):`<div class="empty-note">Wala pang leave request.</div>`;
+
+  // Owner/Manager: Leave Credits & Records section
+  let creditsHtml='';
+  if(session.role==='owner' || session.role==='manager'){
+    const rows=staffNames.map((n,i)=>{
+      const cr=(cache.leaveCredits||{})[n]||{annual_credits:5};
+      const used=leaveUsedDays(n);
+      const remain=(Number(cr.annual_credits)||0)-used;
+      return `<div class="task-card">
+        <div class="task-top"><div class="task-text" style="font-weight:700;font-size:13px;">${escapeHtml(n)}</div>
+          <span class="tag ${remain<=0?'very-high':'low'}">${remain} natitira</span></div>
+        <div style="font-size:11px;color:var(--ink-soft);margin-top:5px;">Annual credits: ${cr.annual_credits} · Nagamit (approved): ${used} araw</div>
+        <div style="display:flex;gap:8px;margin-top:8px;align-items:center;">
+          <input type="number" step="0.5" id="lc_input_${i}" value="${cr.annual_credits}" style="margin:0;max-width:100px;">
+          <button class="btn-ghost btn-small" data-lc-save="${i}" data-lc-name="${escapeHtml(n)}">I-save credits</button>
+        </div>
+      </div>`;
+    }).join('');
+    creditsHtml=`<div class="section-title">📊 Leave Credits (per staff)</div>
+      <p class="hint">I-edit ang annual leave credits bawat empleyado. Awtomatikong binabawas ang approved na Annual Leave. (Ang Sick Leave ay hindi binabawas dito.)</p>${rows}`;
+  }
+
+  // Staff: show their own remaining when a name is selected
+  let staffCredits='';
+  if(session.role==='staff' && leaveForm2.staff){
+    const cr=(cache.leaveCredits||{})[leaveForm2.staff]||{annual_credits:5};
+    const used=leaveUsedDays(leaveForm2.staff);
+    staffCredits=`<div class="hint" style="color:var(--done)">Natitirang Annual Leave ni ${escapeHtml(leaveForm2.staff)}: ${(Number(cr.annual_credits)||0)-used} araw</div>`;
+  }
+
+  return `<div class="screen">${back}${form}${staffCredits}${creditsHtml}<div class="section-title">📋 Mga Request</div>${list}</div>`;
+}
+
+function daysInclusive(a,b){ if(!a||!b)return 0; const d1=new Date(a+'T00:00:00'),d2=new Date(b+'T00:00:00'); const n=Math.round((d2-d1)/86400000)+1; return n>0?n:0; }
+function leaveUsedDays(name){ let d=0; (cache.leaves||[]).forEach(lv=>{ if(lv.staff===name && lv.status==='approved' && lv.type==='Annual Leave'){ d+=daysInclusive(lv.from,lv.until); } }); return d; }
+async function saveLeaveCredits(name, val){ cache.leaveCredits=cache.leaveCredits||{}; cache.leaveCredits[name]={annual_credits:val}; const {error}=await sb.from('leave_credits').upsert({staff:name, annual_credits:val, updated_at:new Date().toISOString()}); if(error)console.error('saveLeaveCredits',error); }
+
+let leaveForm2={staff:'',from:'',until:'',type:'Annual Leave',reason:''};
+let maintForm2={name:'',sched_type:'weekly',weekday:1,time:'13:00'};
+
+function renderMaintSettings(){
+  const back=`<button class="btn-ghost btn-small" data-mtab="maint" style="margin-bottom:12px;">← Mga Maintenance</button>`;
+  const tasks=(cache.maintTasks||[]);
+  const rows=tasks.map(t=>{
+    if(editingMaintId===t.id){
+      const stepsEdit=t.photoSteps.map(ps=>`<div class="task-card" style="padding:9px;margin-bottom:6px;"><div style="font-size:12px;">📷 ${escapeHtml(ps.desc)}</div><button class="btn-small" style="background:var(--very-high);border-color:var(--very-high);color:#fff;margin-top:5px;" data-mdelstep="${t.id}|${ps.id}">Tanggalin</button></div>`).join('');
+      const wk=WEEKDAYS_TL.map((d,i)=>`<option value="${i}" ${t.sched_type==='weekly'&&t.weekday===i?'selected':''}>${d}</option>`).join('');
+      return `<div class="task-card">
+        <div class="field-label">Pangalan</div><input type="text" id="medit-name" value="${escapeHtml(t.name)}">
+        <div class="field-label">Iskedyul</div><select id="medit-type"><option value="weekly" ${t.sched_type==='weekly'?'selected':''}>Lingguhan (weekly)</option><option value="quarterly_last_monday" ${t.sched_type==='quarterly_last_monday'?'selected':''}>Tuwing 3 buwan (last Monday)</option></select>
+        <div class="field-label">Araw (kung weekly)</div><select id="medit-weekday">${wk}</select>
+        <div class="field-label">Oras</div><input type="time" id="medit-time" value="${t.time}">
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:8px;"><input type="checkbox" id="medit-active" ${t.active?'checked':''} style="width:auto;"> Active</label>
+        <div class="field-label">Photo Steps</div>${stepsEdit}
+        <input type="text" id="mnew-step" placeholder="Bagong photo step (description)"><button class="btn-ghost btn-small btn-block" data-maddstep="${t.id}">+ Idagdag na Photo Step</button>
+        <div class="btn-row" style="margin-top:10px;"><button class="btn-primary" data-msave="${t.id}">I-save</button><button class="btn-ghost" data-mcancel="1">Kanselahin</button></div>
+      </div>`;
+    }
+    return `<div class="task-card"><div class="task-top"><div class="task-text" style="font-weight:700;font-size:13px;">${escapeHtml(t.name)}</div><span class="tag ${t.active?'low':'medium'}">${t.active?'Active':'Off'}</span></div>
+      <div style="font-size:11px;color:var(--ink-soft);margin-top:5px;">${maintComputeDue(t).label} · ${t.photoSteps.length} photo step(s)</div>
+      <div class="btn-row" style="margin-top:8px;"><button class="btn-ghost btn-small" data-medit="${t.id}">Edit</button><button class="btn-small" style="background:var(--very-high);border-color:var(--very-high);color:#fff;" data-mdel="${t.id}">Tanggalin</button></div></div>`;
+  }).join('');
+  const wk=WEEKDAYS_TL.map((d,i)=>`<option value="${i}" ${maintForm2.weekday===i?'selected':''}>${d}</option>`).join('');
+  const addForm=addingMaint?`<div class="task-card">
+    <div class="field-label">Pangalan ng bagong task</div><input type="text" id="madd-name" placeholder="hal. Exhaust hood cleaning">
+    <div class="field-label">Iskedyul</div><select id="madd-type"><option value="weekly">Lingguhan (weekly)</option><option value="quarterly_last_monday">Tuwing 3 buwan (last Monday)</option></select>
+    <div class="field-label">Araw (kung weekly)</div><select id="madd-weekday">${wk}</select>
+    <div class="field-label">Oras</div><input type="time" id="madd-time" value="13:00">
+    <div class="btn-row"><button class="btn-primary" id="btn-madd-save">I-save</button><button class="btn-ghost" id="btn-madd-cancel">Kanselahin</button></div></div>`:`<button class="btn-primary btn-block" id="btn-madd" style="margin-bottom:14px;">+ Magdagdag ng Maintenance Task</button>`;
+  return `<div class="screen">${back}<div class="section-title">🔧 Maintenance Setup</div>${addForm}${rows}</div>`;
+}
+
+/* ---- Phase A events ---- */
+function bindPhaseA(){
+  // maintenance tabs via header nav handled by data-go; module-internal nav:
+  document.querySelectorAll('[data-mtab]').forEach(el=>el.addEventListener('click',()=>{maintTab=el.dataset.mtab;activeMaintId=null;editingMaintId=null;addingMaint=false;render();}));
+  document.querySelectorAll('[data-mopen]').forEach(el=>el.addEventListener('click',()=>{activeMaintId=el.dataset.mopen;render();}));
+  document.querySelectorAll('[data-mback]').forEach(el=>el.addEventListener('click',()=>{activeMaintId=null;render();}));
+
+  document.querySelectorAll('[data-mlater]').forEach(el=>el.addEventListener('click',async()=>{
+    const [taskId,mins]=el.dataset.mlater.split('|'); const t=cache.maintTasks.find(x=>x.id===taskId); const due=maintComputeDue(t);
+    const st=cache.maintState[taskId]||{};
+    if(st.due_date!==due.dueDate){st.due_date=due.dueDate;st.captures=st.captures||{};st.postpones=0;st.later_count=0;}
+    st.later_until=Date.now()+parseInt(mins)*60000; st.later_count=(st.later_count||0)+1;
+    cache.maintState[taskId]=st; await saveMaintState(taskId,st); activeMaintId=null;
+    if(st.later_count>=3){ utilOpenWaOwner(`*MAINTENANCE LATER 3x*\n${t.name}\nStaff: ${session.name}\nPaulit-ulit na ni-Later (${st.later_count}x) ngayong araw.`); alert('Later #'+st.later_count+'. Aabisuhan ang owner.'); }
+    else alert('OK, babalik after '+mins+' min. (Later #'+st.later_count+')');
+    render();
+  }));
+  document.querySelectorAll('[data-mpostpone]').forEach(el=>el.addEventListener('click',async()=>{
+    const taskId=el.dataset.mpostpone; const t=cache.maintTasks.find(x=>x.id===taskId); const due=maintComputeDue(t);
+    const st=cache.maintState[taskId]||{};
+    if(st.due_date!==due.dueDate){st.due_date=due.dueDate;st.postpones=0;st.captures=st.captures||{};}
+    const reason=prompt('Bakit hindi pa magagawa ngayon? (required para sa "Bukas na lang")');
+    if(reason===null||reason.trim()===''){alert('Kailangan ng dahilan.');return;}
+    const count=(st.postpones||0); st.postpones=count+1; st.postpone_reason=reason.trim(); st.postpone_until_date=maintAddDays(maintTodayKey(),1);
+    cache.maintState[taskId]=st; await saveMaintState(taskId,st); activeMaintId=null;
+    if(count+1>=3){ utilOpenWaOwner(`*MAINTENANCE POSTPONE 3x*\n${t.name}\nStaff: ${session.name}\nDahilan: ${reason.trim()}`); alert('Ikatlong beses! Aabisuhan ang owner.'); }
+    else alert('Na-postpone hanggang bukas. ('+st.postpones+'/2)\nDahilan: '+reason.trim());
+    render();
+  }));
+  document.querySelectorAll('[data-mcap]').forEach(el=>el.addEventListener('click',()=>{
+    const [taskId,stepId]=el.dataset.mcap.split('|');
+    startMaintCapture(taskId, stepId);
+  }));
+  document.querySelectorAll('[data-mcomplete]').forEach(el=>el.addEventListener('click',async()=>{
+    const taskId=el.dataset.mcomplete; const t=cache.maintTasks.find(x=>x.id===taskId); const due=maintComputeDue(t);
+    const st=cache.maintState[taskId]||{};
+    if(t.photoSteps.length>0 && !t.photoSteps.every(ps=>{const c=(st.captures||{})[ps.id]; return c && !c.uploading;})){ alert('Kunan muna lahat ng litrato (siguraduhing tapos na ang upload).'); return; }
+    st.status='done'; st.due_date=due.dueDate; st.completed_at=maintNowTime()+' · '+maintTodayKey(); st.completed_by=session.name;
+    cache.maintState[taskId]=st; await saveMaintState(taskId,st); activeMaintId=null;
+    alert('✓ Na-save ang maintenance! Awtomatikong ipapadala sa owner ang litrato + GPS.');
+    render();
+  }));
+
+  // leave
+  const fb=document.getElementById('btn-file-leave2');
+  if(fb)fb.addEventListener('click',async()=>{
+    const staff=fval('lv2-staff'),from=fval('lv2-from'),until=fval('lv2-until'),type=fval('lv2-type'),reason=fval('lv2-reason').trim();
+    if(!staff){alert('Piliin ang pangalan.');return;}
+    if(!from||!until){alert('Kumpletuhin ang petsa (mula at hanggang).');return;}
+    if(until<from){alert('Ang "hanggang" ay hindi pwedeng mas maaga sa "mula".');return;}
+    if(!reason){alert('Maglagay ng dahilan.');return;}
+    // Soft warning if annual leave exceeds remaining credits
+    if(type==='Annual Leave'){
+      const cr=(cache.leaveCredits||{})[staff]||{annual_credits:5};
+      const remain=(Number(cr.annual_credits)||0)-leaveUsedDays(staff);
+      const want=daysInclusive(from,until);
+      if(want>remain){
+        if(!confirm(`Babala: ${want} araw ang hinihiling pero ${remain} na lang ang natitirang Annual Leave ni ${staff}.\n\nItuloy pa rin ang request? (Owner/Manager ang magdedesisyon)`)) return;
+      }
+    }
+    const lv={staff,from,until,type,reason,proof:null,status:'pending',filedDate:maintTodayKey()};
+    const id=await saveLeave(lv); lv.id=id||('tmp'+Date.now()); cache.leaves.unshift(lv);
+    leaveForm2={staff:'',from:'',until:'',type:'Annual Leave',reason:''};
+    alert('✓ Na-submit ang leave request!'); render();
+  });
+  ['lv2-staff','lv2-from','lv2-until','lv2-type','lv2-reason'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('input',()=>{leaveForm2={staff:fval('lv2-staff'),from:fval('lv2-from'),until:fval('lv2-until'),type:fval('lv2-type'),reason:fval('lv2-reason')};if(id==='lv2-staff')render();});});
+  // Save leave credits (owner/manager)
+  document.querySelectorAll('[data-lc-save]').forEach(el=>el.addEventListener('click',async()=>{
+    const idx=el.dataset.lcSave; const name=el.dataset.lcName;
+    const input=document.getElementById('lc_input_'+idx); if(!input)return;
+    const v=parseFloat(input.value); if(isNaN(v)||v<0){alert('Maglagay ng tamang bilang ng credits.');return;}
+    await saveLeaveCredits(name, v); alert('✓ Na-save ang credits ni '+name+'.'); render();
+  }));
+  document.querySelectorAll('[data-lv2]').forEach(el=>el.addEventListener('click',async()=>{
+    const [action,id]=el.dataset.lv2.split('|'); const lv=cache.leaves.find(x=>x.id===id); if(!lv)return;
+    if(action==='mgrok'){const note=prompt('Manager note (required para sa approval):');if(!note||!note.trim()){alert('Kailangan ng note.');return;}lv.status='manager_ok';lv.managerBy=session.name;lv.managerNote=note.trim();await updateLeaveDB(id,{status:'manager_ok',manager_by:session.name,manager_note:note.trim()});}
+    if(action==='mgrdecline'){const note=prompt('Dahilan ng decline (required):');if(!note||!note.trim()){alert('Kailangan ng dahilan.');return;}lv.status='declined';lv.managerBy=session.name;lv.managerNote=note.trim();await updateLeaveDB(id,{status:'declined',manager_by:session.name,manager_note:note.trim()});}
+    if(action==='ownerapprove'){lv.status='approved';lv.ownerBy=session.name;await updateLeaveDB(id,{status:'approved',owner_by:session.name});}
+    if(action==='ownerdecline'){const note=prompt('Dahilan ng decline (required):');if(!note||!note.trim()){alert('Kailangan ng dahilan.');return;}lv.status='declined';lv.ownerBy=session.name;lv.ownerNote=note.trim();await updateLeaveDB(id,{status:'declined',owner_by:session.name,owner_note:note.trim()});}
+    render();
+  }));
+
+  // settings
+  const addBtn=document.getElementById('btn-madd'); if(addBtn)addBtn.addEventListener('click',()=>{addingMaint=true;render();});
+  const addCancel=document.getElementById('btn-madd-cancel'); if(addCancel)addCancel.addEventListener('click',()=>{addingMaint=false;render();});
+  const addSave=document.getElementById('btn-madd-save'); if(addSave)addSave.addEventListener('click',async()=>{
+    const name=fval('madd-name').trim(); if(!name){alert('Maglagay ng pangalan.');return;}
+    const sched_type=fval('madd-type'); const weekday=parseInt(fval('madd-weekday')); const time=fval('madd-time');
+    const t={id:'m'+Date.now(),name,active:true,sched_type,weekday:sched_type==='weekly'?weekday:null,time,photoSteps:[],sort_order:(cache.maintTasks||[]).length};
+    cache.maintTasks.push(t); await saveMaintTask(t); addingMaint=false; render();
+  });
+  document.querySelectorAll('[data-medit]').forEach(el=>el.addEventListener('click',()=>{editingMaintId=el.dataset.medit;render();}));
+  document.querySelectorAll('[data-mcancel]').forEach(el=>el.addEventListener('click',()=>{editingMaintId=null;render();}));
+  document.querySelectorAll('[data-msave]').forEach(el=>el.addEventListener('click',async()=>{
+    const id=el.dataset.msave; const t=cache.maintTasks.find(x=>x.id===id);
+    t.name=fval('medit-name').trim()||t.name; t.active=document.getElementById('medit-active').checked;
+    t.sched_type=fval('medit-type'); t.time=fval('medit-time'); t.weekday=t.sched_type==='weekly'?parseInt(fval('medit-weekday')):null;
+    await saveMaintTask(t); editingMaintId=null; render();
+  }));
+  document.querySelectorAll('[data-mdel]').forEach(el=>el.addEventListener('click',async()=>{if(!confirm('Tanggalin ang task?'))return;const id=el.dataset.mdel;cache.maintTasks=cache.maintTasks.filter(x=>x.id!==id);await deleteMaintTask(id);render();}));
+  document.querySelectorAll('[data-maddstep]').forEach(el=>el.addEventListener('click',async()=>{const id=el.dataset.maddstep;const desc=fval('mnew-step').trim();if(!desc){alert('Maglagay ng description.');return;}const t=cache.maintTasks.find(x=>x.id===id);t.photoSteps.push({id:'p'+Date.now(),desc});await saveMaintTask(t);render();}));
+  document.querySelectorAll('[data-mdelstep]').forEach(el=>el.addEventListener('click',async()=>{const [tid,sid]=el.dataset.mdelstep.split('|');const t=cache.maintTasks.find(x=>x.id===tid);t.photoSteps=t.photoSteps.filter(p=>p.id!==sid);await saveMaintTask(t);render();}));
+}
+
+function utilOpenWaOwner(msg){ const num=formatPhoneForWa(cache.settings.owner_whatsapp); window.open((num?`https://wa.me/${num}`:'https://wa.me/')+`?text=${encodeURIComponent(msg)}`,'_blank'); }
+function fval(id){const e=document.getElementById(id);return e?e.value:'';}
+
+/* ----- Phase B1: camera + GPS + compress + upload ----- */
+const MAINT_BUCKET = 'maint-photos';
+
+function getGpsCoords(){
+  return new Promise(resolve=>{
+    if(!navigator.geolocation){ resolve({gps:'', err:'Walang geolocation sa browser na ito'}); return; }
+    navigator.geolocation.getCurrentPosition(
+      p=>resolve({gps:p.coords.latitude.toFixed(5)+','+p.coords.longitude.toFixed(5), err:''}),
+      e=>{
+        let r='hindi alam';
+        if(e && e.code===1) r='Hindi pinayagan ang Location (Permission Denied) — i-allow sa settings';
+        else if(e && e.code===2) r='Hindi makuha ang lokasyon (naka-off ang Location Services)';
+        else if(e && e.code===3) r='Nag-timeout (mahina ang signal) — subukan ulit malapit sa bintana';
+        resolve({gps:'', err:r});
+      },
+      {timeout:15000, enableHighAccuracy:true, maximumAge:0}
+    );
+  });
+}
+
+function compressImage(file, maxDim, quality){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const img=new Image();
+      img.onload=()=>{
+        let w=img.width, h=img.height;
+        if(w>h && w>maxDim){ h=Math.round(h*maxDim/w); w=maxDim; }
+        else if(h>maxDim){ w=Math.round(w*maxDim/h); h=maxDim; }
+        const canvas=document.createElement('canvas'); canvas.width=w; canvas.height=h;
+        canvas.getContext('2d').drawImage(img,0,0,w,h);
+        canvas.toBlob(b=>b?resolve(b):reject(new Error('compress failed')),'image/jpeg',quality);
+      };
+      img.onerror=()=>reject(new Error('image load failed'));
+      img.src=e.target.result;
+    };
+    reader.onerror=()=>reject(new Error('read failed'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function startMaintCapture(taskId, stepId){
+  const input=document.createElement('input');
+  input.type='file'; input.accept='image/*'; input.setAttribute('capture','environment');
+  input.onchange=async()=>{
+    const file=input.files&&input.files[0]; if(!file) return;
+    const t=cache.maintTasks.find(x=>x.id===taskId); const due=maintComputeDue(t);
+    const st=cache.maintState[taskId]||{}; if(st.due_date!==due.dueDate){ st.due_date=due.dueDate; st.captures={}; }
+    st.captures=st.captures||{};
+    // show inline "uploading" state (no blocking alert)
+    st.captures[stepId]={ts:maintNowTime(), gps:'', url:'', uploading:true};
+    cache.maintState[taskId]=st; render();
+    try{
+      const g=await getGpsCoords();
+      const gps=g.gps;
+      const blob=await compressImage(file, 1280, 0.6);
+      const path=taskId+'/'+stepId+'_'+Date.now()+'.jpg';
+      const up=await sb.storage.from(MAINT_BUCKET).upload(path, blob, {contentType:'image/jpeg', upsert:true});
+      if(up.error) throw up.error;
+      const pub=sb.storage.from(MAINT_BUCKET).getPublicUrl(path);
+      const url=pub.data ? pub.data.publicUrl : '';
+      st.captures[stepId]={ts:maintNowTime(), gps, url, path};
+      cache.maintState[taskId]=st; await saveMaintState(taskId,st); render();
+      if(!gps){ setTimeout(()=>alert('Na-upload ang litrato, pero walang GPS.\n\nDahilan: '+(g.err||'hindi alam')+'\n\nTip: i-allow ang Location para sa site na ito, tapos kunan ulit.'),150); }
+    }catch(e){
+      console.error('maint capture',e);
+      delete st.captures[stepId]; cache.maintState[taskId]=st; render();
+      const m=(e&&e.message)?e.message:'hindi alam';
+      setTimeout(()=>alert('Hindi na-upload ang litrato.\n\nDahilan: '+m+'\n\nKung tungkol sa storage/bucket, hindi pa kumpleto ang Phase B1 SQL. Kung internet, subukan ulit.'),150);
+    }
+  };
+  input.click();
+}
+
+
+function escapeHtml(str){
+  return String(str ?? '')
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
+}
+
+(async function start(){
+  await initData();
+  await utilLoadData();
+  await loadPhaseA();
+  render();
+  setupAutoLogout();
+})();
+
+/* ----- Auto-logout after 5 minutes of inactivity ----- */
+let inactivityTimer = null;
+const INACTIVITY_MS = 5 * 60 * 1000; // 5 minutes
+function resetInactivityTimer(){
+  if(!session) return; // only when logged in
+  if(inactivityTimer) clearTimeout(inactivityTimer);
+  inactivityTimer = setTimeout(()=>{
+    if(session){
+      session = null;
+      DB.save('session', null);
+      route = 'login';
+      render();
+      setTimeout(()=>alert('Naka-logout ka dahil 5 minuto nang walang aktibidad. Mag-login ulit.'), 150);
+    }
+  }, INACTIVITY_MS);
+}
+function setupAutoLogout(){
+  ['click','touchstart','keydown','scroll','input'].forEach(evt=>{
+    document.addEventListener(evt, resetInactivityTimer, {passive:true});
+  });
+  resetInactivityTimer();
+}
+</script>
+</body>
+</html>
