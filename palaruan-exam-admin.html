@@ -140,7 +140,7 @@ tbody.dragging tr:not(.dragging){transition:transform .12s}
 
   <div id="app" class="hide">
     <h1>PALARUAN</h1>
-    <div class="sub">Exam Owner Panel · v22 · oras</div>
+    <div class="sub">Exam Owner Panel · v23 · expiry</div>
 
     <div class="tabs">
       <button data-tab="issue" class="on">Bagong Ref</button>
@@ -189,7 +189,10 @@ tbody.dragging tr:not(.dragging){transition:transform .12s}
         </div>
         <input id="i_exp_at" type="hidden">
         <div class="row">
-          <div class="fld"><label>Expire (oras)</label><input id="i_exp" type="number" value="24"></div>
+          <div class="fld"><label>Bisa hanggang (oras pagkatapos ng exam)</label>
+            <input id="i_exp" type="number" value="12" min="1" max="168">
+            <div class="hint">Bilang mula sa <b>takdang oras ng exam</b>, hindi mula ngayon.
+              Kung walang takdang oras, mula sa paggawa ng ref.</div></div>
           <div class="fld"><label>Sino ang nagbigay</label><input id="i_by" placeholder="hal. Gina"></div>
         </div>
         <div class="fld"><label>Notes</label><input id="i_notes"></div>
@@ -1637,15 +1640,24 @@ async function loadRefs(){
             : '<input type="datetime-local" data-exp="'+x.id+'" value="'+esc(dtlocal(x.expected_at))+'" ' +
               'style="padding:6px;font-size:13px;min-width:180px">' +
               '<span class="hint" data-expmsg="'+x.id+'"></span>') + '</td>' +
-         '<td><span class="tag '+s[0]+'">'+esc(s[1])+'</span></td>' +
+         '<td><span class="tag '+s[0]+'">'+esc(s[1])+'</span>' +
+           (x.expired && !done ? '<br><span class="tag t-red">EXPIRED</span>' : '') +
+           (x.expires_at ? '<br><span class="hint">hanggang '+dt(x.expires_at)+'</span>' : '') + '</td>' +
          '<td class="hint">'+dt(x.issued_at)+'</td>' +
-         '<td>'+(done ? '' :
+         '<td style="white-space:nowrap">'+(done ? '' :
+           (x.expired ? '<button class="sm" data-ext="'+x.id+'">Palawigin</button> ' : '') +
            '<button class="ghost sm" data-void="'+x.id+'">Kanselahin</button>')+'</td></tr>';
   });
   h += '</tbody></table>';
   $('r_body').innerHTML = h;
   $('r_body').querySelectorAll('[data-void]').forEach(b => b.addEventListener('click', async () => {
     b.disabled = true; await admin('void_ref', {ref_id:+b.dataset.void}); loadRefs();
+  }));
+  $('r_body').querySelectorAll('[data-ext]').forEach(b => b.addEventListener('click', async () => {
+    b.disabled = true; b.textContent = '…';
+    const r2 = await admin('extend_ref', {ref_id:+b.dataset.ext, hours:12});
+    if(r2.ok){ loadRefs(); }
+    else { b.disabled = false; b.textContent = 'Palawigin'; alert(r2.error || 'Hindi na-palawig.'); }
   }));
   $('r_body').querySelectorAll('[data-exp]').forEach(inp => inp.addEventListener('change', async () => {
     const msg = $('r_body').querySelector('[data-expmsg="'+inp.dataset.exp+'"]');
