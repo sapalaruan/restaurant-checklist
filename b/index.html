@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="tl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#1b3a2f">
+<title>Palaruan Boulevard</title>
+<!-- APP_VERSION_MARK: v2026.09.26-L177 -->
+<!--
+  PALARUAN BRANCH APP — Boulevard.
+
+  WALANG SUSI NG DATABASE SA FILE NA ITO. Sinasadya iyon. Ang tanging
+  kinakausap nito ay ang Edge Function, at ang tanging hawak nito ay isang
+  device token na kaya mong patayin kahit kailan mula sa MAIN APP.
+
+  Kung may makakita man ng buong laman ng teleponong ito, wala siyang
+  makukuhang daan papunta sa sahod, sa PIN o sa CARE — walang ganoong pinto
+  dito. Hindi nakatago; wala talaga.
+-->
+<style>
+:root{
+  --bg:#f4f1ea; --card:#fff; --ink:#1d2721; --ink-soft:#6b7a70;
+  --line:#e3ded2; --brand:#1b3a2f; --accent:#c8752b;
+  --ok:#2f7d51; --warn:#b8791f; --bad:#b4452f;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--ink); font-size:16px;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  padding-bottom:env(safe-area-inset-bottom);
+}
+.wrap{max-width:560px;margin:0 auto;padding:12px 16px 100px}
+.bar{
+  background:var(--brand); color:#fff; padding:calc(10px + env(safe-area-inset-top)) 16px 10px;
+  position:sticky; top:0; z-index:20;
+}
+.bar .t{font-weight:700;letter-spacing:.5px}
+.bar .s{font-size:11px;opacity:.75}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:10px}
+h2{font-size:14px;margin:0 0 8px;letter-spacing:.3px}
+label{display:block;font-size:11px;color:var(--ink-soft);margin:10px 0 4px;letter-spacing:.3px}
+input,select,textarea{
+  width:100%;padding:12px;border:1px solid var(--line);border-radius:9px;
+  font-size:16px;font-family:inherit;background:#fff;color:var(--ink)
+}
+input:focus,select:focus{outline:2px solid var(--brand);outline-offset:-1px}
+button{
+  font:inherit;font-size:15px;border-radius:9px;border:1px solid var(--brand);
+  background:var(--brand);color:#fff;padding:13px 14px;cursor:pointer;width:100%
+}
+button.ghost{background:#fff;color:var(--brand)}
+button.warn{background:var(--bad);border-color:var(--bad)}
+button:disabled{opacity:.45}
+button.sm{padding:9px 10px;font-size:13px;width:auto}
+.row{display:flex;gap:8px;align-items:center}
+.row>*{flex:1}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.tile{
+  background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px;
+  text-align:left;color:var(--ink);cursor:pointer;width:100%
+}
+.tile b{display:block;font-size:14px;line-height:1.25}
+.tile span{font-size:12px;color:var(--ink-soft)}
+.nav{
+  position:fixed;left:0;right:0;bottom:0;display:flex;background:#fff;
+  border-top:1px solid var(--line);z-index:30;padding-bottom:env(safe-area-inset-bottom)
+}
+.nav button{
+  background:none;border:none;color:var(--ink-soft);border-radius:0;
+  padding:10px 4px;font-size:11px;line-height:1.5
+}
+.nav button.on{color:var(--brand);font-weight:700;box-shadow:inset 0 2px 0 var(--brand)}
+.nav .ic{display:block;font-size:19px}
+.line{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;
+  padding:8px 0;border-top:1px dashed var(--line)}
+.line:first-child{border-top:none}
+.hint{font-size:12px;color:var(--ink-soft);line-height:1.5}
+.big{font-size:26px;font-weight:700;letter-spacing:-.5px}
+.pill{display:inline-block;font-size:10px;padding:2px 7px;border-radius:99px;
+  background:var(--line);color:var(--ink-soft);letter-spacing:.3px}
+.pill.ok{background:#dcf0e4;color:var(--ok)}
+.pill.bad{background:#f7ddd7;color:var(--bad)}
+.pill.warn{background:#fbeed5;color:var(--warn)}
+.note{border-left:3px solid var(--warn);background:#fdf6e7;padding:10px;border-radius:0 8px 8px 0;font-size:13px;line-height:1.5}
+.note.bad{border-color:var(--bad);background:#fbeae5}
+.note.ok{border-color:var(--ok);background:#e6f3ea}
+.qty{display:flex;align-items:center;gap:6px}
+.qty button{width:38px;padding:8px 0;font-size:18px;line-height:1}
+.center{text-align:center}
+.sp{height:8px}
+#toast{
+  position:fixed;left:50%;transform:translateX(-50%);bottom:86px;z-index:60;
+  background:var(--ink);color:#fff;padding:11px 16px;border-radius:10px;
+  font-size:13px;max-width:88%;display:none;box-shadow:0 6px 20px rgba(0,0,0,.2)
+}
+</style>
+</head>
+<body>
+<div class="bar">
+  <div class="t">PALARUAN <span style="opacity:.6">BOULEVARD</span></div>
+  <div class="s" id="barsub">—</div>
+</div>
+<div class="wrap" id="app"></div>
+<div class="nav" id="nav" style="display:none"></div>
+<div id="toast"></div>
+
+<script>
+/* ============================================================
+   KONEKSYON — isang address lamang. Walang susi ng database dito.
+   ============================================================ */
+const API = 'https://bipeeundccfcntgzwkkk.supabase.co/functions/v1/branch';
+const APP_VERSION = 'v2026.09.26-L177';
+
+const LS = {
+  get(k, d){ try{ const v=localStorage.getItem('blv_'+k); return v==null?d:JSON.parse(v); }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem('blv_'+k, JSON.stringify(v)); }catch(e){} },
+  del(k){ try{ localStorage.removeItem('blv_'+k); }catch(e){} }
+};
+
+let deviceToken = LS.get('device_token', null);
+let deviceId    = LS.get('device_id', null);
+let session     = LS.get('session', null);   // {token, store_id, staff_name, at}
+let menu        = LS.get('menu', null);      // huling menu — gumagana offline
+let dayState    = null;
+let route       = 'pos';
+let cart        = [];
+let queue       = LS.get('queue', []);       // mga hindi pa naipapadala
+let syncing     = false;
+let busy        = false;
+
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const peso = n => '₱' + (Math.round((Number(n)||0)*100)/100).toLocaleString('en-PH',
+  {minimumFractionDigits:0, maximumFractionDigits:2});
+
+function toast(msg, ms){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.style.display='block';
+  clearTimeout(toast._t);
+  toast._t=setTimeout(()=>{ t.style.display='none'; }, ms||2600);
+}
+
+/* Ang gabi ay natatapos ng 5:00 AM — ang order ng 1:30 AM ay kabilang pa rin
+   sa gabi bago iyon. Kapareho ito ng kuwenta sa server. */
+function businessDate(d){
+  const t = d ? new Date(d) : new Date();
+  const ph = new Date(t.toLocaleString('en-US',{timeZone:'Asia/Manila'}));
+  ph.setHours(ph.getHours()-5);
+  return ph.toLocaleDateString('en-CA');
+}
+function phTime(){
+  return new Date().toLocaleTimeString('en-PH',
+    {hour:'2-digit',minute:'2-digit',timeZone:'Asia/Manila'});
+}
+function uid(){
+  const a=new Uint8Array(16); crypto.getRandomValues(a);
+  return Array.from(a).map(x=>x.toString(16).padStart(2,'0')).join('');
+}
+
+/* ============================================================
+   TAWAG SA PINTO
+   ============================================================ */
+async function call(path, body, opts){
+  const h = {'Content-Type':'application/json'};
+  if(session && session.token) h['x-branch-session'] = session.token;
+  if(deviceToken) h['x-branch-token'] = deviceToken;
+  const ctl = new AbortController();
+  const to = setTimeout(()=>ctl.abort(), (opts&&opts.timeout)||12000);
+  try{
+    const r = await fetch(API+'/'+path, {method:'POST', headers:h,
+      body: JSON.stringify(body||{}), signal: ctl.signal});
+    clearTimeout(to);
+    let j=null;
+    try{ j = await r.json(); }catch(e){ j={ok:false, reason:'Hindi mabasa ang sagot ng server.'}; }
+    if(j && j.ok===false && (j.code==='no_session'||j.code==='expired'||j.code==='revoked')){
+      session=null; LS.del('session');
+      if(j.code==='revoked'){ deviceToken=null; deviceId=null; LS.del('device_token'); LS.del('device_id'); }
+      render();
+    }
+    return j;
+  }catch(e){
+    clearTimeout(to);
+    return {ok:false, offline:true, reason:'Walang koneksyon.'};
+  }
+}
+
+/* ============================================================
+   PILA — ang order ay naitatala sa telepono BAGO pa subukang ipadala.
+   Kahit mamatay ang signal sa gitna, hindi nawawala ang benta.
+   ============================================================ */
+function enqueue(kind, payload){
+  queue.push({kind, payload, at: Date.now()});
+  LS.set('queue', queue);
+  updateBar();
+}
+async function syncQueue(silent){
+  if(syncing || !session) return;
+  if(!queue.length){ if(!silent) toast('Wala nang hinihintay.'); return; }
+  syncing = true; updateBar();
+  const left = [];
+  for(const item of queue.slice()){
+    let res;
+    if(item.kind==='order')      res = await call('order', {order:item.payload});
+    else if(item.kind==='cash')  res = await call('cash',  {cash:item.payload});
+    else if(item.kind==='carry') res = await call('carry', {carry:item.payload});
+    else continue;
+    const okOne = res && (res.ok===true) &&
+      (!res.results || res.results.every(r=>r && r.ok!==false));
+    if(!okOne){
+      if(res && res.offline){ left.push(item); }         // subukan ulit mamaya
+      else if(res && res.ok===false && !res.offline){
+        // Tinanggihan ng server — hindi ito maaayos ng pag-uulit.
+        console.error('itinapon ng server', item, res);
+        toast('May hindi tinanggap: '+((res&&res.reason)||'?'), 5000);
+      }
+    }
+  }
+  queue = left; LS.set('queue', queue);
+  syncing = false; updateBar();
+  if(!silent && !queue.length) toast('✓ Naipadala lahat.');
+  if(!queue.length) refreshState();
+}
+setInterval(()=>{ if(navigator.onLine) syncQueue(true); }, 25000);
+window.addEventListener('online', ()=>syncQueue(true));
+
+async function refreshState(){
+  if(!session) return;
+  const r = await call('state', {});
+  if(r && r.ok){ dayState = r; updateBar(); if(route==='kaha'||route==='pos') render(); }
+}
+
+function updateBar(){
+  const b=document.getElementById('barsub');
+  if(!b) return;
+  const bits=[];
+  if(session && session.staff_name) bits.push(session.staff_name);
+  bits.push(businessDate());
+  if(queue.length) bits.push('⏳ '+queue.length+' hindi pa naipapadala');
+  else if(!navigator.onLine) bits.push('walang signal');
+  b.textContent = bits.join(' · ');
+}
+
+/* ============================================================
+   PAG-ACTIVATE AT PAG-LOGIN
+   ============================================================ */
+function viewActivate(){
+  return `<div class="card">
+    <h2>Irehistro ang teleponong ito</h2>
+    <p class="hint">Kunin ang <b>reference code</b> at ang <b>6-digit</b> mula sa Owner.
+      Isang beses lang ito — pagkatapos, PIN na lang.</p>
+    <label>Reference code</label>
+    <input id="ac-code" inputmode="numeric" maxlength="6" placeholder="6 na numero" autocomplete="off">
+    <label>6-digit mula sa authenticator</label>
+    <input id="ac-otp" inputmode="numeric" maxlength="6" placeholder="6 na numero" autocomplete="off">
+    <label>Palayaw ng telepono</label>
+    <input id="ac-label" placeholder="hal. Boulevard phone" autocomplete="off">
+    <div class="sp"></div>
+    <button id="ac-go">Irehistro</button>
+    <p class="hint center" style="margin-top:10px">${APP_VERSION}</p>
+  </div>`;
+}
+function viewLogin(){
+  const names = (menu && menu.staff) ? menu.staff.map(s=>s.name) : [];
+  return `<div class="card">
+    <h2>Branch PIN</h2>
+    <label>Sino ang nasa shift?</label>
+    ${names.length
+      ? `<select id="lg-name">${names.map(n=>`<option>${esc(n)}</option>`).join('')}</select>`
+      : `<input id="lg-name" placeholder="Pangalan mo" autocomplete="off">`}
+    <label>PIN (7 karakter)</label>
+    <input id="lg-pin" type="password" maxlength="7" placeholder="•••••••" autocomplete="off">
+    <div class="sp"></div>
+    <button id="lg-go">Pumasok</button>
+    <p class="hint center" style="margin-top:10px">${APP_VERSION}</p>
+  </div>`;
+}
+
+/* ============================================================
+   POS
+   ============================================================ */
+let posItem = null;     // napiling item, naghihintay ng laki
+function cartTotal(){ return cart.reduce((t,l)=>t+(Number(l.line_total)||0), 0); }
+
+function viewPOS(){
+  if(!menu || !menu.items || !menu.items.length){
+    return `<div class="card"><h2>Walang menu</h2>
+      <p class="hint">Hindi pa napipili ng Owner kung anong item ang ibinebenta dito,
+        o hindi pa nakakakuha ng menu ang teleponong ito.</p>
+      <div class="sp"></div><button class="ghost" id="pos-reload">Kunin ang menu</button></div>`;
+  }
+  if(posItem){
+    const it = posItem;
+    const opts = (it.variants||[]).length ? it.variants : [{label:null, price:it.price}];
+    return `<div class="card">
+      <h2>${esc(it.name)}</h2>
+      <p class="hint">Piliin ang laki o uri.</p>
+      <div class="grid" style="margin-top:8px">
+        ${opts.map((v,i)=>`<button class="tile" data-opt="${i}">
+          <b>${esc(v.label||it.name)}</b><span>${peso(v.price!=null?v.price:it.price)}</span></button>`).join('')}
+      </div>
+      <div class="sp"></div>
+      <button class="ghost" id="pos-back">Bumalik</button>
+    </div>`;
+  }
+  const cats = {};
+  menu.items.forEach(i=>{ (cats[i.category||'Iba pa'] = cats[i.category||'Iba pa'] || []).push(i); });
+  return `
+  ${cart.length ? `<div class="card">
+    <h2>Order ngayon</h2>
+    ${cart.map((l,i)=>`<div class="line">
+      <span style="flex:2">${esc(l.item_name)}<br><span class="hint">${peso(l.unit_price)} × ${l.qty}</span></span>
+      <span style="flex:0 0 auto;text-align:right">
+        <b>${peso(l.line_total)}</b><br>
+        <span class="qty" style="justify-content:flex-end;margin-top:4px">
+          <button class="ghost sm" data-dec="${i}">−</button>
+          <button class="ghost sm" data-inc="${i}">+</button>
+        </span></span>
+    </div>`).join('')}
+    <div class="line"><b>KABUUAN</b><b class="big">${peso(cartTotal())}</b></div>
+    <div class="sp"></div>
+    <div class="row">
+      <button class="ghost" id="pos-clear">Burahin lahat</button>
+      <button id="pos-pay">Bayad</button>
+    </div>
+  </div>` : ''}
+  <div class="card">
+    <h2>Menu</h2>
+    ${Object.keys(cats).sort().map(c=>`
+      <div style="margin-top:10px"><span class="pill">${esc(c)}</span></div>
+      <div class="grid" style="margin-top:6px">
+        ${cats[c].map(i=>`<button class="tile" data-item="${esc(i.id)}">
+          <b>${esc(i.name)}</b>
+          <span>${(i.variants||[]).length?((i.variants||[]).length+' laki'):peso(i.price)}</span>
+        </button>`).join('')}
+      </div>`).join('')}
+  </div>`;
+}
+
+function viewPay(){
+  const t = cartTotal();
+  return `<div class="card">
+    <h2>Bayad</h2>
+    <div class="line"><span>Kabuuan</span><b class="big">${peso(t)}</b></div>
+    <label>Paraan ng bayad</label>
+    <select id="pay-type">
+      <option value="cash">Cash</option>
+      <option value="gcash">GCash</option>
+      <option value="card">Credit card</option>
+    </select>
+    <label>Diskwento (kung meron)</label>
+    <select id="pay-disc">
+      <option value="">Wala</option>
+      <option value="senior">Senior</option>
+      <option value="pwd">PWD</option>
+      <option value="promo">Promo</option>
+      <option value="staff">Staff meal</option>
+    </select>
+    <div id="pay-discbox" style="display:none">
+      <label>Halaga ng diskwento</label>
+      <input id="pay-discamt" inputmode="decimal" placeholder="0">
+      <p class="hint">Kailangan ng approval ni Manager. Tuloy pa rin ang order —
+        aabot agad sa kanya ang abiso.</p>
+    </div>
+    <div class="sp"></div>
+    <button id="pay-go">Tapusin at i-print</button>
+    <div class="sp"></div>
+    <button class="ghost" id="pay-back">Bumalik</button>
+  </div>`;
+}
+
+/* ============================================================
+   KAHA
+   ============================================================ */
+function viewKaha(){
+  const st = dayState || {};
+  const cash = st.cash || {};
+  return `<div class="card">
+    <h2>Ngayong gabi · ${businessDate()}</h2>
+    <div class="line"><span>Order</span><b>${st.orders!=null?st.orders:'—'}</b></div>
+    <div class="line"><span>Benta</span><b>${st.gross!=null?peso(st.gross):'—'}</b></div>
+    <div class="line"><span>Void</span><b>${st.voids!=null?st.voids:'—'}</b></div>
+    ${queue.length?`<div class="note" style="margin-top:8px">⏳ ${queue.length} ang hindi pa naipapadala.
+      Hindi pa kasama sa bilang sa itaas.</div>`:''}
+  </div>
+  <div class="card">
+    <h2>Panimulang barya</h2>
+    ${cash.opening_float!=null
+      ? `<div class="line"><span>Naitala na</span><b>${peso(cash.opening_float)}</b></div>`
+      : `<label>Magkano ang dala mong panimula?</label>
+         <input id="kh-float" inputmode="decimal" placeholder="1500">
+         <div class="sp"></div><button id="kh-float-go">Itala</button>`}
+  </div>
+  <div class="card">
+    <h2>Bilang sa dulo ng gabi</h2>
+    ${cash.counted
+      ? `<div class="note ok">✓ Naitala na ang bilang. Hindi na ito mababago —
+           si Manager na ang magbe-beripika.</div>`
+      : `<p class="hint">Bilangin ang LAHAT ng perang nasa kaha, kasama ang panimula.
+           <b>Hindi ipapakita kung magkano ang inaasahan</b> — ang totoong nabilang
+           ang kailangan, hindi ang tamang sagot.</p>
+         <label>Kabuuang nabilang</label>
+         <input id="kh-count" inputmode="decimal" placeholder="0">
+         <label>GCash ngayong gabi (kung meron)</label>
+         <input id="kh-gcash" inputmode="decimal" placeholder="0">
+         <label>Credit card ngayong gabi (kung meron)</label>
+         <input id="kh-card" inputmode="decimal" placeholder="0">
+         <div class="sp"></div>
+         <button id="kh-count-go">Isumite ang bilang</button>`}
+  </div>`;
+}
+
+/* ============================================================
+   DALA AT BALIK
+   ============================================================ */
+let carryDraft = null;   // {direction, lines:[{ingredient_id,name,qty,unit}]}
+function viewCarry(){
+  const st = dayState || {};
+  if(!carryDraft){
+    return `<div class="card">
+      <h2>Dala at balik</h2>
+      <div class="line"><span>Dala ngayong gabi</span>
+        <span class="pill ${st.carry_out_done?'ok':''}">${st.carry_out_done?'naitala':'wala pa'}</span></div>
+      <div class="line"><span>Balik</span>
+        <span class="pill ${st.carry_back_done?'ok':''}">${st.carry_back_done?'naitala':'wala pa'}</span></div>
+      <div class="sp"></div>
+      <button id="cr-out">📦 DALA — ang inilabas sa Tinago</button>
+      <div class="sp"></div>
+      <button class="ghost" id="cr-back">↩️ BALIK — ang naiuwi</button>
+      <p class="hint" style="margin-top:10px">Ang <b>nagamit</b> ay ang dala bawas ang balik.
+        Iyon ang ihahambing sa naibenta.</p>
+    </div>`;
+  }
+  const d = carryDraft;
+  return `<div class="card">
+    <h2>${d.direction==='out'?'DALA — inilabas':'BALIK — naiuwi'}</h2>
+    ${d.direction==='back'
+      ? `<p class="hint">Bilangin ang natira. <b>Hindi ipapakita ang dala</b> — ang totoong
+           nabilang ang kailangan.</p>`
+      : `<p class="hint">Ilista ang bawat dinala at kung magkano.</p>`}
+    ${d.lines.map((l,i)=>`<div class="line">
+      <span style="flex:2">${esc(l.name)}<br><span class="hint">${l.qty} ${esc(l.unit||'')}</span></span>
+      <button class="ghost sm" data-crdel="${i}" style="flex:0 0 auto">Alisin</button>
+    </div>`).join('') || '<p class="hint">Wala pang nakalista.</p>'}
+    <label>Ano ang idadagdag?</label>
+    <input id="cr-name" placeholder="hal. Buffalo Sauce" autocomplete="off">
+    <div class="row" style="margin-top:6px">
+      <input id="cr-qty" inputmode="decimal" placeholder="Dami">
+      <input id="cr-unit" placeholder="g / pcs">
+    </div>
+    <div class="sp"></div>
+    <button class="ghost" id="cr-add">Idagdag sa listahan</button>
+    <div class="sp"></div>
+    <button id="cr-save" ${d.lines.length?'':'disabled'}>Isumite</button>
+    <div class="sp"></div>
+    <button class="ghost" id="cr-cancel">Kanselahin</button>
+  </div>`;
+}
+
+/* ============================================================
+   CLAIM STUB — Web Bluetooth, Android lang
+   ============================================================ */
+let printer = null;
+const ESC = {
+  init:[0x1b,0x40], center:[0x1b,0x61,0x01], left:[0x1b,0x61,0x00],
+  bold:[0x1b,0x45,0x01], nobold:[0x1b,0x45,0x00],
+  big:[0x1d,0x21,0x11], normal:[0x1d,0x21,0x00], feed:[0x0a], cut:[0x1d,0x56,0x00]
+};
+function encLine(s){ return Array.from(new TextEncoder().encode(s+'\n')); }
+
+async function connectPrinter(){
+  if(!navigator.bluetooth){
+    toast('Walang Bluetooth sa browser na ito. Kailangan ng Android Chrome.', 5000);
+    return null;
+  }
+  const SERVICES = [
+    {s:'000018f0-0000-1000-8000-00805f9b34fb', c:'00002af1-0000-1000-8000-00805f9b34fb'},
+    {s:'0000ff00-0000-1000-8000-00805f9b34fb', c:'0000ff02-0000-1000-8000-00805f9b34fb'},
+    {s:'e7810a71-73ae-499d-8c15-faa9aef0c3f2', c:'bef8d6c9-9c21-4c9e-b632-bd58c1009f9f'},
+    {s:'49535343-fe7d-4ae5-8fa9-9fafd205e455', c:'49535343-8841-43f4-a8d4-ecbe34729bb3'}
+  ];
+  try{
+    const dev = await navigator.bluetooth.requestDevice({
+      acceptAllDevices: true, optionalServices: SERVICES.map(x=>x.s)
+    });
+    const gatt = await dev.gatt.connect();
+    for(const t of SERVICES){
+      try{
+        const svc = await gatt.getPrimaryService(t.s);
+        const ch  = await svc.getCharacteristic(t.c);
+        printer = {dev, ch};
+        LS.set('printer_name', dev.name||'');
+        return printer;
+      }catch(e){ /* subukan ang susunod */ }
+    }
+    toast('Hindi makilala ang printer na ito.', 4000);
+  }catch(e){
+    if(e && e.name!=='NotFoundError') toast('Hindi nakakonekta: '+(e.message||''), 4000);
+  }
+  return null;
+}
+
+async function printStub(order){
+  if(!printer || !printer.dev.gatt.connected){
+    if(!await connectPrinter()) return false;
+  }
+  const L = [];
+  const push = a => a.forEach(b=>L.push(b));
+  push(ESC.init); push(ESC.center); push(ESC.bold);
+  push(encLine('PALARUAN')); push(encLine('BOULEVARD'));
+  push(ESC.nobold);
+  push(encLine('')); push(ESC.big);
+  push(encLine(order.order_no));
+  push(ESC.normal); push(ESC.left);
+  push(encLine('--------------------------------'));
+  order.lines.forEach(l=>{
+    push(encLine(l.qty+'x '+l.item_name.slice(0,22)));
+    push(encLine('              '+peso(l.line_total)));
+  });
+  push(encLine('--------------------------------'));
+  push(ESC.bold);
+  push(encLine('KABUUAN   '+peso(order.total)));
+  push(ESC.nobold);
+  if(order.discount_amount>0) push(encLine('Diskwento '+peso(order.discount_amount)));
+  push(encLine('Bayad: '+(order.payment_type||'cash')));
+  push(encLine(''));
+  push(encLine(businessDate()+'  '+phTime()));
+  push(encLine('Cashier: '+(order.cashier_name||'')));
+  push(encLine(''));
+  push(ESC.center);
+  push(encLine('CLAIM STUB'));
+  push(encLine('hindi ito opisyal na resibo'));
+  push(encLine('')); push(encLine('')); push(ESC.cut);
+
+  // 20 byte kada padala — iyon ang kayang tanggapin ng murang BLE printer.
+  const bytes = new Uint8Array(L);
+  try{
+    for(let i=0;i<bytes.length;i+=20){
+      await printer.ch.writeValueWithoutResponse(bytes.slice(i, i+20));
+      await new Promise(r=>setTimeout(r, 22));
+    }
+    return true;
+  }catch(e){
+    console.error('print', e);
+    toast('Hindi na-print. May Reprint sa ilalim.', 4000);
+    return false;
+  }
+}
+
+/* ============================================================
+   RENDER
+   ============================================================ */
+let lastOrder = null;
+function render(){
+  const app=document.getElementById('app');
+  const nav=document.getElementById('nav');
+  if(!deviceToken){ app.innerHTML=viewActivate(); nav.style.display='none'; bind(); updateBar(); return; }
+  if(!session){ app.innerHTML=viewLogin(); nav.style.display='none'; bind(); updateBar(); return; }
+
+  nav.style.display='flex';
+  nav.innerHTML = [['pos','🧾','Order'],['kaha','💵','Kaha'],['carry','📦','Dala'],['more','⋯','Iba pa']]
+    .map(([r,i,l])=>`<button class="${route===r?'on':''}" data-nav="${r}">
+      <span class="ic">${i}</span>${l}</button>`).join('');
+
+  let html='';
+  if(route==='pos')        html = (window.__payOpen ? viewPay() : viewPOS());
+  else if(route==='kaha')  html = viewKaha();
+  else if(route==='carry') html = viewCarry();
+  else html = viewMore();
+  app.innerHTML = html;
+  bind(); updateBar();
+}
+
+function viewMore(){
+  return `<div class="card">
+    <h2>Iba pa</h2>
+    <div class="line"><span>Hindi pa naipapadala</span><b>${queue.length}</b></div>
+    <div class="line"><span>Printer</span><span class="hint">${esc(LS.get('printer_name','wala pa'))}</span></div>
+    <div class="line"><span>Bersyon</span><span class="hint">${APP_VERSION}</span></div>
+    <div class="sp"></div>
+    <button class="ghost" id="mr-sync">Ipadala ngayon</button>
+    <div class="sp"></div>
+    <button class="ghost" id="mr-menu">Kunin ulit ang menu</button>
+    <div class="sp"></div>
+    <button class="ghost" id="mr-print">Ikonekta ang printer</button>
+    ${lastOrder?`<div class="sp"></div><button class="ghost" id="mr-reprint">Reprint: ${esc(lastOrder.order_no)}</button>`:''}
+    <div class="sp"></div>
+    <button class="warn" id="mr-out">Mag-logout</button>
+    <p class="hint" style="margin-top:10px">Ang pag-logout ay hindi nagbubura ng hindi pa naipapadala.
+      Mananatili ito hanggang maipadala.</p>
+  </div>`;
+}
+
+/* ============================================================
+   BIND
+   ============================================================ */
+function bind(){
+  const on=(id,fn)=>{ const e=document.getElementById(id); if(e) e.addEventListener('click',fn); };
+  document.querySelectorAll('[data-nav]').forEach(b=>b.addEventListener('click',()=>{
+    window.__payOpen=false; posItem=null; route=b.dataset.nav; render();
+  }));
+
+  // --- activate ---
+  on('ac-go', async()=>{
+    if(busy) return;
+    const code=(document.getElementById('ac-code').value||'').trim();
+    const otp =(document.getElementById('ac-otp').value||'').trim();
+    const label=(document.getElementById('ac-label').value||'').trim();
+    if(code.length!==6 || otp.length!==6){ toast('Anim na numero ang bawat isa.'); return; }
+    busy=true; toast('Nirerehistro...');
+    const r = await call('activate', {code, totp:otp, label});
+    busy=false;
+    if(!r || !r.ok){ toast((r&&r.reason)||'Hindi nagawa.', 5000); return; }
+    deviceToken=r.device_token; deviceId=r.device_id;
+    LS.set('device_token', deviceToken); LS.set('device_id', deviceId);
+    toast('✓ Nakarehistro na ang teleponong ito.');
+    render();
+  });
+
+  // --- login ---
+  on('lg-go', async()=>{
+    if(busy) return;
+    const nEl=document.getElementById('lg-name');
+    const name=(nEl && nEl.value || '').trim();
+    const pin=(document.getElementById('lg-pin').value||'');
+    if(pin.length!==7){ toast('Pitong karakter ang PIN.'); return; }
+    busy=true;
+    const r = await call('login', {pin, staff_name:name});
+    busy=false;
+    if(!r || !r.ok){ toast((r&&r.reason)||'Hindi makapasok.', 4500); return; }
+    session={token:r.session_token, store_id:r.store_id, staff_name:name, at:Date.now()};
+    LS.set('session', session);
+    await loadMenu();
+    await refreshState();
+    syncQueue(true);
+    render();
+  });
+
+  // --- POS ---
+  on('pos-reload', loadMenu);
+  on('pos-back', ()=>{ posItem=null; render(); });
+  document.querySelectorAll('[data-item]').forEach(b=>b.addEventListener('click',()=>{
+    const it=(menu.items||[]).find(x=>x.id===b.dataset.item);
+    if(!it) return;
+    if((it.variants||[]).length){ posItem=it; render(); }
+    else { addToCart(it, null, it.price); }
+  }));
+  document.querySelectorAll('[data-opt]').forEach(b=>b.addEventListener('click',()=>{
+    const it=posItem; if(!it) return;
+    const opts=(it.variants||[]).length?it.variants:[{label:null,price:it.price}];
+    const v=opts[Number(b.dataset.opt)];
+    addToCart(it, v.label, v.price!=null?v.price:it.price);
+    posItem=null; render();
+  }));
+  document.querySelectorAll('[data-inc]').forEach(b=>b.addEventListener('click',()=>{
+    const l=cart[Number(b.dataset.inc)]; l.qty++; l.line_total=l.qty*l.unit_price; render();
+  }));
+  document.querySelectorAll('[data-dec]').forEach(b=>b.addEventListener('click',()=>{
+    const i=Number(b.dataset.dec); const l=cart[i];
+    l.qty--; if(l.qty<=0) cart.splice(i,1); else l.line_total=l.qty*l.unit_price;
+    render();
+  }));
+  on('pos-clear', ()=>{ if(confirm('Burahin ang buong order?')){ cart=[]; render(); } });
+  on('pos-pay', ()=>{ if(!cart.length) return; window.__payOpen=true; render(); });
+  on('pay-back', ()=>{ window.__payOpen=false; render(); });
+  const dsel=document.getElementById('pay-disc');
+  if(dsel) dsel.addEventListener('change',()=>{
+    document.getElementById('pay-discbox').style.display = dsel.value ? 'block':'none';
+  });
+  on('pay-go', finishOrder);
+
+  // --- kaha ---
+  on('kh-float-go', async()=>{
+    const v=Number((document.getElementById('kh-float').value||'').trim());
+    if(!isFinite(v)||v<0){ toast('Hindi tamang halaga.'); return; }
+    enqueue('cash', {business_date:businessDate(), opening_float:v, opened_by:session.staff_name});
+    toast('✓ Naitala ang panimula.');
+    await syncQueue(true); render();
+  });
+  on('kh-count-go', async()=>{
+    const c=Number((document.getElementById('kh-count').value||'').trim());
+    if(!isFinite(c)||c<0){ toast('Hindi tamang halaga.'); return; }
+    const g=Number((document.getElementById('kh-gcash').value||'0'))||0;
+    const k=Number((document.getElementById('kh-card').value||'0'))||0;
+    if(!confirm('Isumite ang bilang na '+peso(c)+'?\n\nHINDI NA ITO MABABAGO pagkatapos.')) return;
+    enqueue('cash', {business_date:businessDate(), counted_cash:c, counted_by:session.staff_name,
+                     gcash_total:g, card_total:k});
+    toast('✓ Naisumite ang bilang.');
+    await syncQueue(true); render();
+  });
+
+  // --- dala at balik ---
+  on('cr-out',  ()=>{ carryDraft={direction:'out',  lines:[]}; render(); });
+  on('cr-back', ()=>{ carryDraft={direction:'back', lines:[]}; render(); });
+  on('cr-cancel', ()=>{ carryDraft=null; render(); });
+  on('cr-add', ()=>{
+    const n=(document.getElementById('cr-name').value||'').trim();
+    const q=Number((document.getElementById('cr-qty').value||'').trim());
+    const u=(document.getElementById('cr-unit').value||'').trim();
+    if(!n){ toast('Anong item?'); return; }
+    if(!isFinite(q)||q<=0){ toast('Ilang piraso o gramo?'); return; }
+    carryDraft.lines.push({ingredient_id:n, name:n, qty:q, unit:u});
+    render();
+  });
+  document.querySelectorAll('[data-crdel]').forEach(b=>b.addEventListener('click',()=>{
+    carryDraft.lines.splice(Number(b.dataset.crdel),1); render();
+  }));
+  on('cr-save', async()=>{
+    if(!carryDraft.lines.length) return;
+    enqueue('carry', {id:'carry_'+uid(), business_date:businessDate(),
+      direction:carryDraft.direction, by_name:session.staff_name, lines:carryDraft.lines});
+    carryDraft=null;
+    toast('✓ Naisumite.');
+    await syncQueue(true); render();
+  });
+
+  // --- iba pa ---
+  on('mr-sync', ()=>syncQueue(false));
+  on('mr-menu', loadMenu);
+  on('mr-print', connectPrinter);
+  on('mr-reprint', ()=>{ if(lastOrder) printStub(lastOrder); });
+  on('mr-out', ()=>{
+    if(queue.length && !confirm(queue.length+' ang hindi pa naipapadala.\n\nMananatili ito sa teleponong ito. Mag-logout pa rin?')) return;
+    session=null; LS.del('session'); route='pos'; render();
+  });
+}
+
+function addToCart(it, label, price){
+  const name = label ? (it.name+' — '+label) : it.name;
+  const found = cart.find(l=>l.item_name===name);
+  if(found){ found.qty++; found.line_total=found.qty*found.unit_price; }
+  else cart.push({menu_item_id:it.id, variant_label:label, item_name:name,
+                  qty:1, unit_price:Number(price)||0, line_total:Number(price)||0});
+  render();
+}
+
+async function loadMenu(){
+  const r = await call('menu', {});
+  if(r && r.ok && r.menu){
+    menu = r.menu; LS.set('menu', menu);
+    if(r.state && r.state.ok) dayState = r.state;
+    toast('✓ Bagong menu.');
+  }else if(menu){
+    toast('Walang signal — ginagamit ang huling menu.', 3500);
+  }else{
+    toast((r&&r.reason)||'Hindi makuha ang menu.', 4000);
+  }
+  render();
+}
+
+function nextOrderNo(){
+  const bd = businessDate();
+  let ctr = LS.get('ctr', {d:null, n:0});
+  if(ctr.d !== bd) ctr = {d:bd, n:0};
+  ctr.n++; LS.set('ctr', ctr);
+  const dev = String(deviceId||'00').slice(-2).toUpperCase();
+  return 'BLV-'+dev+'-'+String(ctr.n).padStart(6,'0');
+}
+
+async function finishOrder(){
+  if(busy || !cart.length) return;
+  busy=true;
+  const dsel=document.getElementById('pay-disc');
+  const disc = dsel ? dsel.value : '';
+  const damt = disc ? (Number((document.getElementById('pay-discamt').value||'0'))||0) : 0;
+  const order = {
+    id: 'ord_'+uid(),
+    order_no: nextOrderNo(),
+    cashier_name: session.staff_name,
+    ordered_at: new Date().toISOString(),
+    total: Math.max(0, cartTotal() - damt),
+    payment_type: (document.getElementById('pay-type')||{}).value || 'cash',
+    kind: disc==='staff' ? 'staff_meal' : 'sale',
+    discount_type: disc || null,
+    discount_amount: damt,
+    lines: cart.map((l,i)=>({n:i+1, ...l}))
+  };
+  // NAITALA MUNA SA TELEPONO. Kahit mamatay ang signal o ang printer,
+  // hindi nawawala ang benta.
+  enqueue('order', order);
+  lastOrder = order;
+  cart = []; window.__payOpen=false;
+  busy=false;
+  render();
+  toast('✓ '+order.order_no);
+  printStub(order);
+  syncQueue(true);
+}
+
+/* ============================================================
+   SIMULA
+   ============================================================ */
+(function start(){
+  render();
+  if(session){ loadMenu(); refreshState(); syncQueue(true); }
+  // Ang PWA ay nananatiling bukas buong gabi — i-refresh ang bilang paminsan.
+  setInterval(()=>{ if(session && route==='kaha') refreshState(); }, 60000);
+})();
+</script>
+</body>
+</html>
