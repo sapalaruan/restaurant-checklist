@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <meta name="theme-color" content="#1b3a2f">
 <title>Palaruan Boulevard</title>
-<!-- APP_VERSION_MARK: v2026.09.26-L180 -->
+<!-- APP_VERSION_MARK: v2026.09.26-L182 -->
 <!--
   PALARUAN BRANCH APP — Boulevard.
 
@@ -110,7 +110,7 @@ button.sm{padding:9px 10px;font-size:13px;width:auto}
    KONEKSYON — isang address lamang. Walang susi ng database dito.
    ============================================================ */
 const API = 'https://bipeeundccfcntgzwkkk.supabase.co/functions/v1/branch';
-const APP_VERSION = 'v2026.09.26-L180';
+const APP_VERSION = 'v2026.09.26-L182';
 
 const LS = {
   get(k, d){ try{ const v=localStorage.getItem('blv_'+k); return v==null?d:JSON.parse(v); }catch(e){ return d; } },
@@ -273,6 +273,27 @@ function viewLogin(){
     <div class="sp"></div>
     <button id="lg-go">Pumasok</button>
     <p class="hint center" style="margin-top:10px">${APP_VERSION}</p>
+  </div>`;
+}
+
+function viewPinChange(){
+  return `<div class="card">
+    <h2>Palitan ang PIN mo</h2>
+    <p class="hint">Pansamantala lang ang PIN na ibinigay sa'yo ng Owner — alam
+      niya iyon. Gumawa ka ng sarili mo, ikaw lang ang dapat may alam.
+      Ito ang magpapatunay na ikaw nga ang gumawa ng bawat order at bilang.</p>
+    <label>Ang PIN na ibinigay sa'yo</label>
+    <input id="pc-old" type="password" maxlength="10" autocomplete="off"
+      autocapitalize="off" autocorrect="off" spellcheck="false">
+    <label>Bagong PIN (4-10 karakter)</label>
+    <input id="pc-new" type="password" maxlength="10" autocomplete="off"
+      autocapitalize="off" autocorrect="off" spellcheck="false">
+    <label>Ulitin ang bago</label>
+    <input id="pc-new2" type="password" maxlength="10" autocomplete="off"
+      autocapitalize="off" autocorrect="off" spellcheck="false">
+    <div class="sp"></div>
+    <button id="pc-go">I-save at magpatuloy</button>
+    <p class="hint center" style="margin-top:10px">Kailangan ng signal para dito.</p>
   </div>`;
 }
 
@@ -556,6 +577,10 @@ function render(){
   const nav=document.getElementById('nav');
   if(!deviceToken){ app.innerHTML=viewActivate(); nav.style.display='none'; bind(); updateBar(); return; }
   if(!session){ app.innerHTML=viewLogin(); nav.style.display='none'; bind(); updateBar(); return; }
+  // Pansamantala pa ang PIN na bigay ng Owner. Walang ibang mabubuksan
+  // hangga't hindi ito napapalitan — dahil hangga't alam ng iba ang PIN mo,
+  // pwede nilang sabihing ikaw ang gumawa ng hindi mo ginawa.
+  if(session.must_change){ app.innerHTML=viewPinChange(); nav.style.display='none'; bind(); updateBar(); return; }
 
   nav.style.display='flex';
   nav.innerHTML = [['pos','🧾','Order'],['kaha','💵','Kaha'],['carry','📦','Dala'],['more','⋯','Iba pa']]
@@ -628,12 +653,31 @@ function bind(){
     busy=false;
     if(pinEl) pinEl.value='';
     if(!r || !r.ok){ toast((r&&r.reason)||'Hindi makapasok.', 4500); return; }
-    session={token:r.session_token, store_id:r.store_id, staff_name:r.staff_name, at:Date.now()};
+    session={token:r.session_token, store_id:r.store_id, staff_name:r.staff_name,
+             must_change:!!r.must_change, at:Date.now()};
     LS.set('session', session);
     await loadMenu();
     await refreshState();
     syncQueue(true);
     render();
+  });
+
+  // --- palit ng PIN ---
+  on('pc-go', async()=>{
+    if(busy) return;
+    const o=(document.getElementById('pc-old').value||'');
+    const n=(document.getElementById('pc-new').value||'');
+    const n2=(document.getElementById('pc-new2').value||'');
+    if(n.length<4 || n.length>10){ toast('Apat hanggang sampung karakter ang bagong PIN.'); return; }
+    if(n!==n2){ toast('Hindi magkatugma ang inulit.'); return; }
+    if(n===o){ toast('Iba naman sa binigay sa\'yo ang ilagay.'); return; }
+    busy=true;
+    const r = await call('pin', {old:o, new:n});
+    busy=false;
+    if(!r || !r.ok){ toast((r&&r.reason)||'Hindi napalitan.', 4500); return; }
+    session.must_change=false; LS.set('session', session);
+    toast('✓ Napalitan. Ikaw na lang ang may alam nito.', 4000);
+    await loadMenu(); await refreshState(); render();
   });
 
   // --- POS ---
