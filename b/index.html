@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <meta name="theme-color" content="#1b3a2f">
 <title>Palaruan Boulevard</title>
-<!-- APP_VERSION_MARK: v2026.09.26-L183 -->
+<!-- APP_VERSION_MARK: v2026.09.26-L189 -->
 <!--
   PALARUAN BRANCH APP — Boulevard.
 
@@ -110,7 +110,7 @@ button.sm{padding:9px 10px;font-size:13px;width:auto}
    KONEKSYON — isang address lamang. Walang susi ng database dito.
    ============================================================ */
 const API = 'https://bipeeundccfcntgzwkkk.supabase.co/functions/v1/branch';
-const APP_VERSION = 'v2026.09.26-L183';
+const APP_VERSION = 'v2026.09.26-L189';
 
 const LS = {
   get(k, d){ try{ const v=localStorage.getItem('blv_'+k); return v==null?d:JSON.parse(v); }catch(e){ return d; } },
@@ -126,6 +126,14 @@ let dayState    = null;
 let route       = 'pos';
 let cart        = [];
 let queue       = LS.get('queue', []);       // mga hindi pa naipapadala
+let whoList     = LS.get('who', null);      // pangalan sa login — gumagana offline
+let pendingCarries = null;                  // padalang hinihintay pang tanggapin
+let balikList      = null;                  // pangalan lang — WALANG dami (blind)
+let balikDraft     = {};
+let rcvDraft       = {};
+let carryMode      = null;                  // null | 'balik' | 'rcv:<id>'
+let lastTouch   = Date.now();               // huling galaw ng tao
+const IDLE_MS   = 30*60*1000;               // 30 minuto
 let syncing     = false;
 let busy        = false;
 
@@ -204,6 +212,7 @@ async function syncQueue(silent){
     if(item.kind==='order')      res = await call('order', {order:item.payload});
     else if(item.kind==='cash')  res = await call('cash',  {cash:item.payload});
     else if(item.kind==='carry') res = await call('carry', {carry:item.payload});
+    else if(item.kind==='item')  res = await call('item',  {item:item.payload});
     else continue;
     const okOne = res && (res.ok===true) &&
       (!res.results || res.results.every(r=>r && r.ok!==false));
@@ -261,12 +270,17 @@ function viewActivate(){
   </div>`;
 }
 function viewLogin(){
-  // PIN lang. Ang PIN na ang nagsasabi kung sino — walang pinipiling
-  // pangalan, kaya hindi pwedeng magpanggap ang isa bilang iba.
+  const list = (whoList && whoList.length) ? whoList : null;
   return `<div class="card">
-    <h2>PIN mo</h2>
-    <p class="hint">Sariling PIN mo ito — hindi ang PIN ng iba. Ito ang malalagay sa
-      bawat resibo at sa bilang ng kaha.</p>
+    <h2>Pumasok</h2>
+    <p class="hint">Sariling PIN mo — hindi ang PIN ng iba. Ang pangalan mo ang
+      malalagay sa bawat resibo at sa bilang ng kaha.</p>
+    <label>Pangalan mo</label>
+    ${list
+      ? `<select id="lg-who">${list.map(x=>`<option value="${esc(x.staff_id)}">${esc(x.name)}</option>`).join('')}</select>`
+      : `<div class="hint">Hindi pa nakukuha ang listahan.
+           <button id="lg-refresh" style="margin-top:6px;">Kunin ang listahan</button></div>`}
+    <label>PIN</label>
     <input id="lg-pin" type="password" maxlength="10" placeholder="••••" autocomplete="off"
       autocapitalize="off" autocorrect="off" spellcheck="false"
       style="text-align:center; letter-spacing:6px; font-size:20px;">
@@ -274,6 +288,20 @@ function viewLogin(){
     <button id="lg-go">Pumasok</button>
     <p class="hint center" style="margin-top:10px">${APP_VERSION}</p>
   </div>`;
+}
+async function loadCarry(){
+  const r = await call('pending', {});
+  if(r && r.ok && Array.isArray(r.rows)){ pendingCarries=r.rows; render(); }
+}
+async function loadBalikList(){
+  const r = await call('balik_list', {});
+  if(r && r.ok && Array.isArray(r.rows)) balikList=r.rows;
+  else toast((r&&r.reason)||'Hindi makuha ang listahan. Kailangan ng signal.', 4500);
+}
+async function loadWho(){
+  const r = await call('who', {});
+  if(r && r.ok && Array.isArray(r.staff)){ whoList=r.staff; LS.set('who', whoList); render(); }
+  else if(r && r.reason) toast(r.reason, 4000);
 }
 
 function viewPinChange(){
@@ -415,8 +443,11 @@ function viewKaha(){
   <div class="card">
     <h2>Bilang sa dulo ng gabi</h2>
     ${cash.counted
-      ? `<div class="note ok">✓ Naitala na ang bilang. Hindi na ito mababago —
-           si Manager na ang magbe-beripika.</div>`
+      ? (cash.status==='verified'
+          ? `<div class="note ok">✓ Na-verify na ito${cash.verified_by?' ni '+esc(cash.verified_by):''}${cash.verified_at?' · '+esc(cash.verified_at):''}.
+               <br>Kasama na ang GCash (${peso(cash.gcash_total||0)}) at card (${peso(cash.card_total||0)}). Tapos na ang gabing ito.</div>`
+          : `<div class="note ok">✓ Naitala na ang bilang. Hindi na ito mababago —
+               hinihintay ang verify ng Owner o Manager.</div>`)
       : `<p class="hint">Bilangin ang LAHAT ng perang nasa kaha, kasama ang panimula.
            <b>Hindi ipapakita kung magkano ang inaasahan</b> — ang totoong nabilang
            ang kailangan, hindi ang tamang sagot.</p>
@@ -428,53 +459,131 @@ function viewKaha(){
          <input id="kh-card" inputmode="decimal" placeholder="0">
          <div class="sp"></div>
          <button id="kh-count-go">Isumite ang bilang</button>`}
+  </div>
+  ${((st.verified_days||[]).length)?`<div class="card">
+    <h2>Mga gabing tapos na</h2>
+    <p class="hint">Na-verify na ng Owner o Manager — pati ang GCash at card.</p>
+    ${st.verified_days.map(v=>`<div class="line"><span>${esc(v.petsa)}
+      <br><span class="hint">GCash ${peso(v.gcash||0)} · Card ${peso(v.card||0)}${v.ni?' · ni '+esc(v.ni):''}</span></span>
+      <span class="pill ok">✓</span></div>`).join('')}
+  </div>`:''}
+  ${viewCashItems()}`;
+}
+
+// GASTOS AT DAGDAG NA CASH.
+// Ang gastos ay HINDI agad nababawas sa kaha — hinihintay ang Owner.
+// Sinasabi ito nang malinaw sa nagtatala, para walang magtatakang bakit
+// mukhang kulang ang kaha.
+function viewCashItems(){
+  const items = (dayState && dayState.items) ? dayState.items : [];
+  const pend  = queue.filter(q=>q.kind==='item').length;
+  const stLbl = s => s==='pending' ? '<span class="note">hintay kay Owner</span>'
+                   : s==='rejected' ? '<span class="note bad">tinanggihan</span>'
+                   : '<span class="note ok">ok</span>';
+  return `<div class="card">
+    <h2>Gastos at dagdag na cash</h2>
+    <p class="hint">Ang <b>gastos</b> ay hindi muna babawas sa kaha — hinihintay ang
+      pag-apruba ni Owner. Hanggang hindi pa, magmumukhang kulang ang kaha ng
+      halagang ito. Normal iyon.</p>
+    <label>Uri</label>
+    <select id="ci-kind">
+      <option value="expense">Gastos (may lumabas na pera)</option>
+      <option value="cash_in">Dagdag na cash (may pumasok na pera)</option>
+    </select>
+    <label>Para saan</label>
+    <input id="ci-desc" placeholder="hal. yelo, load, panukli" autocomplete="off">
+    <div id="ci-vendor-wrap">
+      <label>Saan binili / kanino galing</label>
+      <input id="ci-vendor" placeholder="hal. tindahan sa kanto" autocomplete="off">
+    </div>
+    <label>Magkano</label>
+    <input id="ci-amount" inputmode="decimal" placeholder="0">
+    <div id="ci-source-wrap">
+      <label>Saan galing ang pera</label>
+      <select id="ci-source">
+        <option value="drawer">Sa kaha</option>
+        <option value="outside">Hindi sa kaha (sariling pera)</option>
+      </select>
+    </div>
+    <div class="sp"></div>
+    <button id="ci-go">Itala</button>
+    ${pend?`<div class="note" style="margin-top:8px">⏳ ${pend} ang hindi pa naipapadala.</div>`:''}
+    ${items.length?`<div style="margin-top:10px">
+      ${items.map(i=>`<div class="line" style="align-items:flex-start">
+        <span>${i.kind==='expense'?'➖':'➕'} ${esc(i.description)}
+          <br><span class="hint">${esc(i.by_name||'')} · ${esc(i.oras||'')} ${stLbl(i.status)}</span></span>
+        <b>${peso(i.amount)}</b></div>`).join('')}
+    </div>`:'<p class="hint" style="margin-top:8px">Wala pang naitala ngayong gabi.</p>'}
   </div>`;
 }
 
 /* ============================================================
    DALA AT BALIK
    ============================================================ */
-let carryDraft = null;   // {direction, lines:[{ingredient_id,name,qty,unit}]}
 function viewCarry(){
   const st = dayState || {};
-  if(!carryDraft){
+  const pend = pendingCarries || [];
+  const bl   = balikList || [];
+
+  if(carryMode==='balik'){
+    // BLIND: pangalan lang ang ibinibigay ng server — walang dami.
     return `<div class="card">
-      <h2>Dala at balik</h2>
-      <div class="line"><span>Dala ngayong gabi</span>
-        <span class="pill ${st.carry_out_done?'ok':''}">${st.carry_out_done?'naitala':'wala pa'}</span></div>
-      <div class="line"><span>Balik</span>
-        <span class="pill ${st.carry_back_done?'ok':''}">${st.carry_back_done?'naitala':'wala pa'}</span></div>
+      <h2>BALIK — ang naiuwi</h2>
+      <p class="hint">Bilangin ang natira sa bawat isa. <b>Hindi ipapakita kung ilan ang dinala</b> —
+        ang totoong nabilang ang kailangan, hindi ang tamang sagot.</p>
+      ${bl.length ? bl.map(x=>`<div class="line">
+          <span style="flex:2">${esc(x.name)}<br><span class="hint">${esc(x.unit||'')}</span></span>
+          <input inputmode="decimal" data-balik="${esc(x.ingredient_id)}"
+            value="${balikDraft[x.ingredient_id]!=null?esc(String(balikDraft[x.ingredient_id])):''}"
+            placeholder="0" style="flex:1; max-width:110px; margin:0; text-align:right">
+        </div>`).join('')
+        : '<p class="hint">Walang hawak ang Boulevard ngayon. Wala munang ibabalik.</p>'}
+      ${bl.length?`<div class="sp"></div>
+        <button id="bk-save">Isumite ang bilang</button>
+        <p class="hint" style="margin-top:8px">Isang beses lang ito. Pagkatapos, hindi na mababago.</p>`:''}
       <div class="sp"></div>
-      <button id="cr-out">📦 DALA — ang inilabas sa Tinago</button>
-      <div class="sp"></div>
-      <button class="ghost" id="cr-back">↩️ BALIK — ang naiuwi</button>
-      <p class="hint" style="margin-top:10px">Ang <b>nagamit</b> ay ang dala bawas ang balik.
-        Iyon ang ihahambing sa naibenta.</p>
+      <button class="ghost" id="bk-cancel">Bumalik</button>
     </div>`;
   }
-  const d = carryDraft;
+
+  if(carryMode && carryMode.startsWith('rcv:')){
+    const id = carryMode.slice(4);
+    const c  = pend.find(x=>x.carry_id===id);
+    if(!c){ carryMode=null; return viewCarry(); }
+    return `<div class="card">
+      <h2>Tanggapin ang padala</h2>
+      <p class="hint">Mula kay ${esc(c.by_name||'?')} · ${esc(c.at||'')}.
+        Bilangin ang totoong dumating. Kung kulang, ilagay ang totoo — huwag ang padala.</p>
+      ${(c.lines||[]).map(l=>`<div class="line">
+        <span style="flex:2">${esc(l.name)}<br><span class="hint">padala: ${l.qty} ${esc(l.unit||'')}</span></span>
+        <input inputmode="decimal" data-rcv="${esc(l.ingredient_id)}"
+          value="${rcvDraft[l.ingredient_id]!=null?esc(String(rcvDraft[l.ingredient_id])):esc(String(l.qty))}"
+          style="flex:1; max-width:110px; margin:0; text-align:right">
+      </div>`).join('')}
+      <div class="sp"></div>
+      <button id="rcv-save">Tanggapin</button>
+      <div class="sp"></div>
+      <button class="ghost" id="rcv-cancel">Bumalik</button>
+    </div>`;
+  }
+
   return `<div class="card">
-    <h2>${d.direction==='out'?'DALA — inilabas':'BALIK — naiuwi'}</h2>
-    ${d.direction==='back'
-      ? `<p class="hint">Bilangin ang natira. <b>Hindi ipapakita ang dala</b> — ang totoong
-           nabilang ang kailangan.</p>`
-      : `<p class="hint">Ilista ang bawat dinala at kung magkano.</p>`}
-    ${d.lines.map((l,i)=>`<div class="line">
-      <span style="flex:2">${esc(l.name)}<br><span class="hint">${l.qty} ${esc(l.unit||'')}</span></span>
-      <button class="ghost sm" data-crdel="${i}" style="flex:0 0 auto">Alisin</button>
-    </div>`).join('') || '<p class="hint">Wala pang nakalista.</p>'}
-    <label>Ano ang idadagdag?</label>
-    <input id="cr-name" placeholder="hal. Buffalo Sauce" autocomplete="off">
-    <div class="row" style="margin-top:6px">
-      <input id="cr-qty" inputmode="decimal" placeholder="Dami">
-      <input id="cr-unit" placeholder="g / pcs">
-    </div>
+    <h2>Dala at balik</h2>
+    <div class="line"><span>Balik ngayong gabi</span>
+      <span class="pill ${st.carry_back_done?'ok':''}">${st.carry_back_done?'naitala':'wala pa'}</span></div>
     <div class="sp"></div>
-    <button class="ghost" id="cr-add">Idagdag sa listahan</button>
+    ${pend.length ? pend.map(c=>`<div class="line" style="align-items:flex-start">
+        <span style="flex:2">📦 Padala ni ${esc(c.by_name||'?')}
+          <br><span class="hint">${esc(c.at||'')} · ${(c.lines||[]).length} klase</span></span>
+        <button data-rcvgo="${esc(c.carry_id)}" style="flex:0 0 auto">Tanggapin</button>
+      </div>`).join('')
+      : '<p class="hint">Walang bagong padala mula sa Tinago.</p>'}
     <div class="sp"></div>
-    <button id="cr-save" ${d.lines.length?'':'disabled'}>Isumite</button>
+    <button class="ghost" id="cr-refresh">🔄 Tingnan kung may bagong padala</button>
     <div class="sp"></div>
-    <button class="ghost" id="cr-cancel">Kanselahin</button>
+    <button ${st.carry_back_done?'disabled':''} id="cr-balik">↩️ BALIK — ang naiuwi</button>
+    <p class="hint" style="margin-top:10px">Ang <b>nagamit</b> ay ang dumating bawas ang naibalik.
+      Iyon ang ihahambing sa naibenta.</p>
   </div>`;
 }
 
@@ -572,11 +681,36 @@ async function printStub(order){
    RENDER
    ============================================================ */
 let lastOrder = null;
+// TATLUMPUNG MINUTONG WALANG GALAW = LABAS.
+// Naiiwan ang telepono sa counter. Ang susunod na hahawak ay hindi dapat
+// makapag-order sa pangalan ng nauna. Hindi nabubura ang pila at ang
+// pagkarehistro ng telepono — PIN lang ang kailangan ulit.
+function touch(){ lastTouch=Date.now(); }
+function idleCheck(){
+  if(!session) return;
+  if(Date.now()-lastTouch < IDLE_MS) return;
+  if(queue.length) syncQueue(true);
+  session=null; LS.del('session'); route='pos'; cart=[]; window.__payOpen=false;
+  window.__whoTried=false; render();
+  toast('Kinalabas ka dahil 30 minutong walang galaw. Ilagay ulit ang PIN mo.', 6000);
+}
+setInterval(idleCheck, 30000);
+['click','keydown','touchstart'].forEach(ev=>
+  document.addEventListener(ev, touch, {passive:true, capture:true}));
+
 function render(){
   const app=document.getElementById('app');
   const nav=document.getElementById('nav');
   if(!deviceToken){ app.innerHTML=viewActivate(); nav.style.display='none'; bind(); updateBar(); return; }
-  if(!session){ app.innerHTML=viewLogin(); nav.style.display='none'; bind(); updateBar(); return; }
+  if(!session){
+    app.innerHTML=viewLogin(); nav.style.display='none'; bind(); updateBar();
+    // Walang listahan pa (bagong telepono, o bagong tao na naidagdag):
+    // subukang kunin agad — isang beses lang bawat pagpakita.
+    if((!whoList || !whoList.length) && navigator.onLine && !window.__whoTried){
+      window.__whoTried=true; loadWho();
+    }
+    return;
+  }
   // Pansamantala pa ang PIN na bigay ng Owner. Walang ibang mabubuksan
   // hangga't hindi ito napapalitan — dahil hangga't alam ng iba ang PIN mo,
   // pwede nilang sabihing ikaw ang gumawa ng hindi mo ginawa.
@@ -590,7 +724,11 @@ function render(){
   let html='';
   if(route==='pos')        html = (window.__payOpen ? viewPay() : viewPOS());
   else if(route==='kaha')  html = viewKaha();
-  else if(route==='carry') html = viewCarry();
+  else if(route==='carry'){
+    html = viewCarry();
+    // Isang beses kada pagbukas: tingnan kung may padalang hinihintay.
+    if(pendingCarries===null && navigator.onLine) setTimeout(loadCarry,0);
+  }
   else html = viewMore();
   app.innerHTML = html;
   bind(); updateBar();
@@ -640,21 +778,27 @@ function bind(){
     LS.set('device_token', deviceToken); LS.set('device_id', deviceId);
     toast('✓ Nakarehistro na ang teleponong ito.');
     render();
+    loadWho();
   });
 
   // --- login ---
+  on('lg-refresh', loadWho);
   on('lg-go', async()=>{
     if(busy) return;
     const pinEl=document.getElementById('lg-pin');
+    const whoEl=document.getElementById('lg-who');
     const pin=(pinEl && pinEl.value || '');
+    const sid=(whoEl && whoEl.value || '');
+    if(!sid){ toast('Piliin muna ang pangalan mo.'); return; }
     if(pin.length<4){ toast('Apat na karakter man lang ang PIN.'); return; }
     busy=true;
-    const r = await call('login', {pin});
+    const r = await call('login', {pin, staff_id:sid});
     busy=false;
     if(pinEl) pinEl.value='';
     if(!r || !r.ok){ toast((r&&r.reason)||'Hindi makapasok.', 4500); return; }
     session={token:r.session_token, store_id:r.store_id, staff_name:r.staff_name,
              must_change:!!r.must_change, at:Date.now()};
+    lastTouch=Date.now(); loadWho();
     LS.set('session', session);
     await loadMenu();
     await refreshState();
@@ -681,6 +825,34 @@ function bind(){
   });
 
   // --- POS ---
+  const ciKind=document.getElementById('ci-kind');
+  const ciToggle=()=>{
+    const isExp=(ciKind&&ciKind.value)!=='cash_in';
+    const v=document.getElementById('ci-vendor-wrap');
+    const s=document.getElementById('ci-source-wrap');
+    if(v) v.style.display = isExp ? 'block' : 'none';
+    if(s) s.style.display = isExp ? 'block' : 'none';
+  };
+  if(ciKind){ ciKind.addEventListener('change', ciToggle); ciToggle(); }
+  on('ci-go', async()=>{
+    const kind=(document.getElementById('ci-kind')||{}).value||'expense';
+    const desc=((document.getElementById('ci-desc')||{}).value||'').trim();
+    const vend=((document.getElementById('ci-vendor')||{}).value||'').trim();
+    const amt =Number(((document.getElementById('ci-amount')||{}).value||'').trim());
+    const src =(document.getElementById('ci-source')||{}).value||'drawer';
+    if(desc.length<2){ toast('Ilagay kung para saan.'); return; }
+    if(!isFinite(amt) || amt<=0){ toast('Ilagay ang halaga.'); return; }
+    if(!confirm((kind==='expense'?'Gastos':'Dagdag na cash')+' na '+peso(amt)+' para sa "'+desc+'"?'
+       +(kind==='expense'?'\n\nHindi muna ito babawas sa kaha hangga\'t hindi inaaprubahan ni Owner.':''))) return;
+    enqueue('item', { id:'ci_'+uid(), kind, description:desc, vendor:vend||null,
+      amount:amt, source:src, by_name:(session&&session.staff_name)||null,
+      business_date:businessDate(), at_ts:new Date().toISOString() });
+    ['ci-desc','ci-vendor','ci-amount'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
+    toast(kind==='expense' ? '✓ Naitala. Hintay sa approval ni Owner.' : '✓ Naitala.');
+    syncQueue(true);
+    render();
+  });
+
   on('pos-reload', loadMenu);
   on('pos-back', ()=>{ posItem=null; render(); });
   document.querySelectorAll('[data-item]').forEach(b=>b.addEventListener('click',()=>{
@@ -734,28 +906,66 @@ function bind(){
   });
 
   // --- dala at balik ---
-  on('cr-out',  ()=>{ carryDraft={direction:'out',  lines:[]}; render(); });
-  on('cr-back', ()=>{ carryDraft={direction:'back', lines:[]}; render(); });
-  on('cr-cancel', ()=>{ carryDraft=null; render(); });
-  on('cr-add', ()=>{
-    const n=(document.getElementById('cr-name').value||'').trim();
-    const q=Number((document.getElementById('cr-qty').value||'').trim());
-    const u=(document.getElementById('cr-unit').value||'').trim();
-    if(!n){ toast('Anong item?'); return; }
-    if(!isFinite(q)||q<=0){ toast('Ilang piraso o gramo?'); return; }
-    carryDraft.lines.push({ingredient_id:n, name:n, qty:q, unit:u});
-    render();
-  });
-  document.querySelectorAll('[data-crdel]').forEach(b=>b.addEventListener('click',()=>{
-    carryDraft.lines.splice(Number(b.dataset.crdel),1); render();
+  // Ang DALA ay galing sa MAIN APP — hindi na sinusulat dito. Dito lang
+  // tinatanggap. Ang BALIK ay blind: pangalan lang ang ibinibigay ng server.
+  on('cr-refresh', loadCarry);
+  on('cr-balik', async()=>{ await loadBalikList(); carryMode='balik'; balikDraft={}; render(); });
+  on('bk-cancel', ()=>{ carryMode=null; render(); });
+  on('rcv-cancel', ()=>{ carryMode=null; rcvDraft={}; render(); });
+  document.querySelectorAll('[data-rcvgo]').forEach(b=>b.addEventListener('click',()=>{
+    carryMode='rcv:'+b.dataset.rcvgo; rcvDraft={}; render();
   }));
-  on('cr-save', async()=>{
-    if(!carryDraft.lines.length) return;
-    enqueue('carry', {id:'carry_'+uid(), business_date:businessDate(),
-      direction:carryDraft.direction, by_name:session.staff_name, lines:carryDraft.lines});
-    carryDraft=null;
-    toast('✓ Naisumite.');
-    await syncQueue(true); render();
+  document.querySelectorAll('[data-rcv]').forEach(inp=>inp.addEventListener('input',()=>{
+    rcvDraft[inp.dataset.rcv]=inp.value;
+  }));
+  document.querySelectorAll('[data-balik]').forEach(inp=>inp.addEventListener('input',()=>{
+    balikDraft[inp.dataset.balik]=inp.value;
+  }));
+  on('rcv-save', async()=>{
+    if(busy) return;
+    const id=(carryMode||'').slice(4);
+    const c=(pendingCarries||[]).find(x=>x.carry_id===id);
+    if(!c) return;
+    const lines=(c.lines||[]).map(l=>{
+      const raw = rcvDraft[l.ingredient_id];
+      const v = (raw===undefined || raw==='') ? Number(l.qty) : Number(raw);
+      return {ingredient_id:l.ingredient_id, qty:v};
+    });
+    if(lines.some(l=>!isFinite(l.qty) || l.qty<0)){ toast('May maling dami.'); return; }
+    const iba=lines.filter(l=>{
+      const s=(c.lines||[]).find(x=>x.ingredient_id===l.ingredient_id);
+      return s && Number(s.qty)!==l.qty;
+    });
+    if(iba.length && !confirm(iba.length+' ang hindi tugma sa padala.\n\n'
+      +iba.map(l=>{const s=(c.lines||[]).find(x=>x.ingredient_id===l.ingredient_id);
+        return '• '+s.name+': padala '+s.qty+', dumating '+l.qty;}).join('\n')
+      +'\n\nIto ang itatala at makikita ni Owner. Tama ba?')) return;
+    busy=true;
+    const r=await call('receive', {carry_id:id, lines});
+    busy=false;
+    if(!r || !r.ok){ toast((r&&r.reason)||'Hindi naitala. Subukan ulit kapag may signal.', 5000); return; }
+    toast('✓ Natanggap.');
+    carryMode=null; rcvDraft={};
+    await loadCarry(); await refreshState(); render();
+  });
+  on('bk-save', async()=>{
+    if(busy) return;
+    const lines=(balikList||[]).map(x=>{
+      const raw=balikDraft[x.ingredient_id];
+      return {ingredient_id:x.ingredient_id, qty: (raw===undefined||raw==='') ? 0 : Number(raw)};
+    });
+    if(lines.some(l=>!isFinite(l.qty) || l.qty<0)){ toast('May maling dami.'); return; }
+    const blangko=(balikList||[]).filter(x=>balikDraft[x.ingredient_id]===undefined || balikDraft[x.ingredient_id]==='');
+    if(blangko.length && !confirm(blangko.length+' ang walang nailagay — ituturing na ZERO (ubos).\n\n'
+      +blangko.slice(0,8).map(x=>'• '+x.name).join('\n')+(blangko.length>8?'\n…':'')+'\n\nTama ba?')) return;
+    if(!confirm('Isumite ang bilang?\n\nIsang beses lang ito — hindi na mababago pagkatapos.')) return;
+    busy=true;
+    const r=await call('balik', {lines});
+    busy=false;
+    if(!r || !r.ok){ toast((r&&r.reason)||'Hindi naitala. Kailangan ng signal dito.', 5000); return; }
+    toast('✓ Naitala ang balik.');
+    carryMode=null; balikDraft={}; balikList=null;
+    await refreshState(); render();
   });
 
   // --- iba pa ---
@@ -765,7 +975,7 @@ function bind(){
   on('mr-reprint', ()=>{ if(lastOrder) printStub(lastOrder); });
   on('mr-out', ()=>{
     if(queue.length && !confirm(queue.length+' ang hindi pa naipapadala.\n\nMananatili ito sa teleponong ito. Mag-logout pa rin?')) return;
-    session=null; LS.del('session'); route='pos'; render();
+    session=null; LS.del('session'); route='pos'; window.__whoTried=false; render();
   });
 }
 
