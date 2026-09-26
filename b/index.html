@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <meta name="theme-color" content="#1b3a2f">
 <title>Palaruan Boulevard</title>
-<!-- APP_VERSION_MARK: v2026.09.26-L178 -->
+<!-- APP_VERSION_MARK: v2026.09.26-L180 -->
 <!--
   PALARUAN BRANCH APP — Boulevard.
 
@@ -110,7 +110,7 @@ button.sm{padding:9px 10px;font-size:13px;width:auto}
    KONEKSYON — isang address lamang. Walang susi ng database dito.
    ============================================================ */
 const API = 'https://bipeeundccfcntgzwkkk.supabase.co/functions/v1/branch';
-const APP_VERSION = 'v2026.09.26-L178';
+const APP_VERSION = 'v2026.09.26-L180';
 
 const LS = {
   get(k, d){ try{ const v=localStorage.getItem('blv_'+k); return v==null?d:JSON.parse(v); }catch(e){ return d; } },
@@ -261,15 +261,15 @@ function viewActivate(){
   </div>`;
 }
 function viewLogin(){
-  const names = (menu && menu.staff) ? menu.staff.map(s=>s.name) : [];
+  // PIN lang. Ang PIN na ang nagsasabi kung sino — walang pinipiling
+  // pangalan, kaya hindi pwedeng magpanggap ang isa bilang iba.
   return `<div class="card">
-    <h2>Branch PIN</h2>
-    <label>Sino ang nasa shift?</label>
-    ${names.length
-      ? `<select id="lg-name">${names.map(n=>`<option>${esc(n)}</option>`).join('')}</select>`
-      : `<input id="lg-name" placeholder="Pangalan mo" autocomplete="off">`}
-    <label>PIN (7 karakter)</label>
-    <input id="lg-pin" type="password" maxlength="7" placeholder="•••••••" autocomplete="off">
+    <h2>PIN mo</h2>
+    <p class="hint">Sariling PIN mo ito — hindi ang PIN ng iba. Ito ang malalagay sa
+      bawat resibo at sa bilang ng kaha.</p>
+    <input id="lg-pin" type="password" maxlength="10" placeholder="••••" autocomplete="off"
+      autocapitalize="off" autocorrect="off" spellcheck="false"
+      style="text-align:center; letter-spacing:6px; font-size:20px;">
     <div class="sp"></div>
     <button id="lg-go">Pumasok</button>
     <p class="hint center" style="margin-top:10px">${APP_VERSION}</p>
@@ -620,15 +620,15 @@ function bind(){
   // --- login ---
   on('lg-go', async()=>{
     if(busy) return;
-    const nEl=document.getElementById('lg-name');
-    const name=(nEl && nEl.value || '').trim();
-    const pin=(document.getElementById('lg-pin').value||'');
-    if(pin.length!==7){ toast('Pitong karakter ang PIN.'); return; }
+    const pinEl=document.getElementById('lg-pin');
+    const pin=(pinEl && pinEl.value || '');
+    if(pin.length<4){ toast('Apat na karakter man lang ang PIN.'); return; }
     busy=true;
-    const r = await call('login', {pin, staff_name:name});
+    const r = await call('login', {pin});
     busy=false;
+    if(pinEl) pinEl.value='';
     if(!r || !r.ok){ toast((r&&r.reason)||'Hindi makapasok.', 4500); return; }
-    session={token:r.session_token, store_id:r.store_id, staff_name:name, at:Date.now()};
+    session={token:r.session_token, store_id:r.store_id, staff_name:r.staff_name, at:Date.now()};
     LS.set('session', session);
     await loadMenu();
     await refreshState();
