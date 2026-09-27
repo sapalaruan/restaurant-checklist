@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <meta name="theme-color" content="#1b3a2f">
 <title>Palaruan Boulevard</title>
-<!-- APP_VERSION_MARK: v2026.09.27-L196 -->
+<!-- APP_VERSION_MARK: v2026.09.27-L197 -->
 <!--
   PALARUAN BRANCH APP — Boulevard.
 
@@ -110,7 +110,7 @@ button.sm{padding:9px 10px;font-size:13px;width:auto}
    KONEKSYON — isang address lamang. Walang susi ng database dito.
    ============================================================ */
 const API = 'https://bipeeundccfcntgzwkkk.supabase.co/functions/v1/branch';
-const APP_VERSION = 'v2026.09.27-L196';
+const APP_VERSION = 'v2026.09.27-L197';
 
 const LS = {
   get(k, d){ try{ const v=localStorage.getItem('blv_'+k); return v==null?d:JSON.parse(v); }catch(e){ return d; } },
@@ -129,6 +129,10 @@ let queue       = LS.get('queue', []);       // mga hindi pa naipapadala
 let whoList     = LS.get('who', null);      // pangalan sa login — gumagana offline
 let pendingCarries = null;                  // padalang hinihintay pang tanggapin
 let balikList      = null;                  // pangalan lang — WALANG dami (blind)
+let countList      = null;                  // bilang ng hawak: pangalan lang din
+let countDraft     = {};                    // ang tinipa nilang bilang
+let countNote      = '';                    // tala ng nagbilang
+let countResult    = null;                  // pagkakaiba, ipinapakita PAGKATAPOS isumite
 let balikDraft     = {};
 let rcvDraft       = {};
 let carryMode      = null;                  // null | 'balik' | 'rcv:<id>'
@@ -238,6 +242,32 @@ async function refreshState(){
   const r = await call('state', {});
   if(r && r.ok){ dayState = r; updateBar(); if(route==='kaha'||route==='pos') render(); }
 }
+// KUSANG PAG-UPDATE. Ang bawat tab ay may sariling kailangan; ito ang kumukuha
+// nito tuwing lumilipat ka, tuwing bumabalik ka sa app, at tuwing sandali
+// habang nasa DALA. Walang pipindutin para lang makita ang bagong padala.
+let __refreshing=false;
+async function refreshFor(r, quiet){
+  if(!session || !navigator.onLine || __refreshing) return;
+  __refreshing=true;
+  try{
+    await refreshState();
+    if(r==='carry'){
+      const before=(pendingCarries||[]).length;
+      await loadCarry();
+      const after=(pendingCarries||[]).length;
+      if(!quiet && after>before) toast('📦 May bagong padala mula sa Tinago.', 4000);
+    }
+  }catch(e){ /* tahimik — hindi ito dapat makasira ng screen */ }
+  finally{ __refreshing=false; }
+}
+// Pagbalik sa app (naka-lock ang telepono, o lumipat ng app): sariwain agad.
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState==='visible' && session) refreshFor(route, true);
+});
+window.addEventListener('focus', ()=>{ if(session) refreshFor(route, true); });
+// Habang nasa DALA, tumitingin kada 20 segundo — doon lang, para hindi
+// sayangin ang data sa ibang screen.
+setInterval(()=>{ if(session && route==='carry' && !carryMode) refreshFor('carry'); }, 20000);
 
 function updateBar(){
   const b=document.getElementById('barsub');
@@ -296,6 +326,11 @@ async function loadCarry(){
 async function loadBalikList(){
   const r = await call('balik_list', {});
   if(r && r.ok && Array.isArray(r.rows)) balikList=r.rows;
+  else toast((r&&r.reason)||'Hindi makuha ang listahan. Kailangan ng signal.', 4500);
+}
+async function loadCountList(){
+  const r = await call('count_list', {});
+  if(r && r.ok && Array.isArray(r.rows)) countList=r.rows;
   else toast((r&&r.reason)||'Hindi makuha ang listahan. Kailangan ng signal.', 4500);
 }
 async function loadWho(){
@@ -546,6 +581,54 @@ function viewCarry(){
     </div>`;
   }
 
+  // BILANG NG HAWAK — para masabi kung iba ang totoo sa sabi ng sistema.
+  // BULAG ito: walang ipinapakitang dami habang nagbibilang. Kung makikita
+  // ang sagot, ang sagot ang isusulat — hindi ang totoong nabilang.
+  if(carryMode==='count'){
+    if(countResult){
+      const rows=countResult.rows||[];
+      return `<div class="card">
+        <h2>Naipadala ang bilang</h2>
+        ${rows.length
+          ? `<p class="hint"><b>${rows.length}</b> ang hindi tugma sa sabi ng sistema.
+               Naipadala na ito kay Owner. <b>Wala pang nababago sa stock</b> —
+               siya ang magpapasya.</p>
+             ${rows.map(r=>`<div class="line">
+               <span style="flex:1; min-width:0">${esc(r.name)}
+                 <br><span class="hint">sistema: ${r.sistema} ${esc(r.unit||'')}</span></span>
+               <span style="text-align:right"><b>${r.nabilang}</b>
+                 <br><span class="hint" style="color:${Number(r.iba)>0?'var(--ok)':'var(--bad)'}">
+                   ${Number(r.iba)>0?'+':''}${r.iba}</span></span>
+             </div>`).join('')}`
+          : `<p class="hint">Tugma ang lahat sa sabi ng sistema. Walang kailangang ayusin.</p>`}
+        <div class="sp"></div>
+        <button class="ghost" id="cnt-done">Tapos na</button>
+      </div>`;
+    }
+    const cl=countList||[];
+    return `<div class="card">
+      <h2>Bilangin ang hawak namin</h2>
+      <p class="hint">Ilagay ang <b>totoong nabilang</b> sa bawat isa.
+        <b>Hindi ipapakita kung ano ang sabi ng sistema</b> — ang totoo ang kailangan,
+        hindi ang tamang sagot. Lalabas ang pagkakaiba pagkatapos isumite.
+        <br>Hindi ito nagpapalit ng stock: si Owner ang magpapasya.</p>
+      ${cl.length ? cl.map(x=>`<div class="line">
+          <span style="flex:1; min-width:0">${esc(x.name)}<br><span class="hint">${esc(x.unit||'')}</span></span>
+          <input inputmode="decimal" data-cnt="${esc(x.ingredient_id)}"
+            value="${countDraft[x.ingredient_id]!=null?esc(String(countDraft[x.ingredient_id])):''}"
+            placeholder="0" style="flex:0 0 110px; max-width:110px; margin:0; text-align:right">
+        </div>`).join('')
+        : '<p class="hint">Walang naitalang hawak ang Boulevard. Wala munang bibilangin.</p>'}
+      ${cl.length?`<div class="sp"></div>
+        <input id="cnt-note" placeholder="Tala (opsyonal) — hal. nabasa, nalaglag"
+          value="${esc(countNote||'')}">
+        <div class="sp"></div>
+        <button id="cnt-save">Isumite ang bilang</button>`:''}
+      <div class="sp"></div>
+      <button class="ghost" id="cnt-cancel">Bumalik</button>
+    </div>`;
+  }
+
   if(carryMode && carryMode.startsWith('rcv:')){
     const id = carryMode.slice(4);
     const c  = pend.find(x=>x.carry_id===id);
@@ -572,18 +655,22 @@ function viewCarry(){
     <div class="line"><span>Balik ngayong gabi</span>
       <span class="pill ${st.carry_back_done?'ok':''}">${st.carry_back_done?'naitala':'wala pa'}</span></div>
     <div class="sp"></div>
-    ${pend.length ? pend.map(c=>`<div class="line" style="align-items:flex-start">
-        <span style="flex:2">📦 Padala ni ${esc(c.by_name||'?')}
+    ${pend.length ? pend.map(c=>`<div class="line" style="align-items:center">
+        <span style="flex:1; min-width:0">📦 <b>Padala ni ${esc(c.by_name||'?')}</b>
           <br><span class="hint">${esc(c.at||'')} · ${(c.lines||[]).length} klase</span></span>
-        <button data-rcvgo="${esc(c.carry_id)}" style="flex:0 0 auto">Tanggapin</button>
+        <button class="sm" data-rcvgo="${esc(c.carry_id)}">Tanggapin</button>
       </div>`).join('')
       : '<p class="hint">Walang bagong padala mula sa Tinago.</p>'}
     <div class="sp"></div>
     <button class="ghost" id="cr-refresh">🔄 Tingnan kung may bagong padala</button>
     <div class="sp"></div>
     <button ${st.carry_back_done?'disabled':''} id="cr-balik">↩️ BALIK — ang naiuwi</button>
+    <div class="sp"></div>
+    <button class="ghost" id="cr-count">🔢 Bilangin ang hawak namin</button>
     <p class="hint" style="margin-top:10px">Ang <b>nagamit</b> ay ang dumating bawas ang naibalik.
-      Iyon ang ihahambing sa naibenta.</p>
+      Iyon ang ihahambing sa naibenta.
+      <br>Kung sa tingin mo ay <b>mali ang laman ng sistema</b>, bilangin ang totoong hawak —
+      ipapadala ito kay Owner, at siya ang magpapasya.</p>
   </div>`;
 }
 
@@ -760,7 +847,13 @@ function viewMore(){
 function bind(){
   const on=(id,fn)=>{ const e=document.getElementById(id); if(e) e.addEventListener('click',fn); };
   document.querySelectorAll('[data-nav]').forEach(b=>b.addEventListener('click',()=>{
-    window.__payOpen=false; posItem=null; route=b.dataset.nav; render();
+    window.__payOpen=false; posItem=null; route=b.dataset.nav;
+    carryMode=null; countResult=null;
+    render();
+    // KUSANG KUMUKUHA SA BAWAT PAGLIPAT. Dati, ang datos ay kinukuha lang
+    // sa unang pagbukas — kaya kahit matagal nang naipadala ang stock,
+    // luma pa rin ang nakikita hangga't hindi pinipindot ang 🔄.
+    refreshFor(route);
   }));
 
   // --- activate ---
@@ -803,6 +896,11 @@ function bind(){
     await loadMenu();
     await refreshState();
     syncQueue(true);
+    // Sariwa ang lahat pagkapasok — kasama ang DALA. Dati, kailangan pang
+    // pindutin ang 🔄 bago makita ang padalang matagal nang naipadala, kaya
+    // akala ng staff hindi pa naipapadala.
+    pendingCarries=null; balikList=null; countList=null;
+    loadCarry();
     render();
   });
 
@@ -911,6 +1009,36 @@ function bind(){
   on('cr-refresh', loadCarry);
   on('cr-balik', async()=>{ await loadBalikList(); carryMode='balik'; balikDraft={}; render(); });
   on('bk-cancel', ()=>{ carryMode=null; render(); });
+  // --- bilang ng hawak ---
+  on('cr-count', async()=>{
+    await loadCountList();
+    carryMode='count'; countDraft={}; countNote=''; countResult=null; render();
+  });
+  on('cnt-cancel', ()=>{ carryMode=null; countDraft={}; countResult=null; render(); });
+  on('cnt-done', ()=>{ carryMode=null; countDraft={}; countResult=null; countList=null; render(); });
+  document.querySelectorAll('[data-cnt]').forEach(inp=>inp.addEventListener('input',()=>{
+    countDraft[inp.dataset.cnt]=inp.value;
+  }));
+  const cntNote=document.getElementById('cnt-note');
+  if(cntNote) cntNote.addEventListener('input',()=>{ countNote=cntNote.value; });
+  on('cnt-save', async()=>{
+    if(busy) return;
+    const lines=(countList||[]).map(x=>{
+      const raw=countDraft[x.ingredient_id];
+      return {ingredient_id:x.ingredient_id, qty: (raw===undefined||raw==='') ? 0 : Number(raw)};
+    });
+    if(!lines.length){ toast('Walang bibilangin.'); return; }
+    if(lines.some(l=>!isFinite(l.qty) || l.qty<0)){ toast('May maling dami.'); return; }
+    const blangko=(countList||[]).filter(x=>countDraft[x.ingredient_id]===undefined || countDraft[x.ingredient_id]==='');
+    if(blangko.length && !confirm(blangko.length+' ang walang nailagay — ituturing na ZERO.\n\n'
+      +blangko.slice(0,8).map(x=>'• '+x.name).join('\n')+(blangko.length>8?'\n…':'')+'\n\nTama ba?')) return;
+    if(!confirm('Isumite ang bilang?\n\nHindi ito magpapalit ng stock — si Owner ang magpapasya.')) return;
+    busy=true;
+    const r=await call('count_put', {lines, note:countNote});
+    busy=false;
+    if(!r || !r.ok){ toast((r&&r.reason)||'Hindi naitala. Kailangan ng signal dito.', 5000); return; }
+    countResult=r; render();
+  });
   on('rcv-cancel', ()=>{ carryMode=null; rcvDraft={}; render(); });
   document.querySelectorAll('[data-rcvgo]').forEach(b=>b.addEventListener('click',()=>{
     carryMode='rcv:'+b.dataset.rcvgo; rcvDraft={}; render();
