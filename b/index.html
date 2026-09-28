@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <meta name="theme-color" content="#1b3a2f">
 <title>Palaruan Boulevard</title>
-<!-- APP_VERSION_MARK: v2026.09.27-L197 -->
+<!-- APP_VERSION_MARK: v2026.09.28-L198 -->
 <!--
   PALARUAN BRANCH APP — Boulevard.
 
@@ -110,7 +110,7 @@ button.sm{padding:9px 10px;font-size:13px;width:auto}
    KONEKSYON — isang address lamang. Walang susi ng database dito.
    ============================================================ */
 const API = 'https://bipeeundccfcntgzwkkk.supabase.co/functions/v1/branch';
-const APP_VERSION = 'v2026.09.27-L197';
+const APP_VERSION = 'v2026.09.28-L198';
 
 const LS = {
   get(k, d){ try{ const v=localStorage.getItem('blv_'+k); return v==null?d:JSON.parse(v); }catch(e){ return d; } },
@@ -145,6 +145,17 @@ const esc = s => String(s==null?'':s).replace(/[&<>"']/g, c =>
   ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const peso = n => '₱' + (Math.round((Number(n)||0)*100)/100).toLocaleString('en-PH',
   {minimumFractionDigits:0, maximumFractionDigits:2});
+// PARA SA PRINTER LANG.
+//
+// Ang ₱ ay U+20B1 — tatlong byte sa UTF-8. Ang murang thermal printer ay
+// nagbabasa ng ISANG byte kada titik, ayon sa sarili niyang code page, at
+// WALA sa kanila ang ₱. Kaya ang ₱10 ay lumalabas na "re 10": ang tatlong
+// byte ay binabasa niyang tatlong magkaibang titik.
+//
+// Hindi ito kayang ayusin ng ibang pagsusulat — wala talagang ₱ sa mga
+// code page ng ESC/POS. Ang nababasa at hindi nagsisinungaling ay "PHP".
+const pesoP = n => 'PHP ' + (Math.round((Number(n)||0)*100)/100).toLocaleString('en-PH',
+  {minimumFractionDigits:2, maximumFractionDigits:2});
 
 function toast(msg, ms){
   const t=document.getElementById('toast');
@@ -432,6 +443,14 @@ function viewPay(){
       <option value="gcash">GCash</option>
       <option value="card">Credit card</option>
     </select>
+    <div id="pay-cashbox">
+      <label>Ibinayad (cash)</label>
+      <input id="pay-tendered" inputmode="decimal" placeholder="0">
+      <div class="line" style="border-top:none; padding-top:4px">
+        <span>Sukli</span><b class="big" id="pay-sukli">—</b></div>
+      <p class="hint">Pwedeng iwang blangko kung eksakto ang bayad.
+        Ang sukli ay lalabas din sa resibo.</p>
+    </div>
     <label>Diskwento (kung meron)</label>
     <select id="pay-disc">
       <option value="">Wala</option>
@@ -723,23 +742,30 @@ async function printStub(order){
   }
   const L = [];
   const push = a => a.forEach(b=>L.push(b));
-  push(ESC.init); push(ESC.center); push(ESC.bold);
-  push(encLine('PALARUAN')); push(encLine('BOULEVARD'));
-  push(ESC.nobold);
-  push(encLine('')); push(ESC.big);
+  // WALANG PANGALAN NG TINDAHAN SA ITAAS — hiniling ng Owner na tanggalin.
+  push(ESC.init); push(ESC.center);
+  push(ESC.big);
   push(encLine(order.order_no));
   push(ESC.normal); push(ESC.left);
   push(encLine('--------------------------------'));
   order.lines.forEach(l=>{
     push(encLine(l.qty+'x '+l.item_name.slice(0,22)));
-    push(encLine('              '+peso(l.line_total)));
+    push(encLine('              '+pesoP(l.line_total)));
   });
   push(encLine('--------------------------------'));
   push(ESC.bold);
-  push(encLine('KABUUAN   '+peso(order.total)));
+  push(encLine('KABUUAN   '+pesoP(order.total)));
   push(ESC.nobold);
-  if(order.discount_amount>0) push(encLine('Diskwento '+peso(order.discount_amount)));
+  if(order.discount_amount>0) push(encLine('Diskwento '+pesoP(order.discount_amount)));
   push(encLine('Bayad: '+(order.payment_type||'cash')));
+  // SUKLI — para hindi na kailangang magkuwenta sa ulo ang cashier.
+  // Cash lang: sa GCash at card ay walang sukli.
+  if((order.payment_type||'cash')==='cash' && Number(order.cash_tendered)>0){
+    push(encLine('Ibinayad   '+pesoP(order.cash_tendered)));
+    push(ESC.bold);
+    push(encLine('SUKLI      '+pesoP(Math.max(0, Number(order.cash_tendered)-Number(order.total||0)))));
+    push(ESC.nobold);
+  }
   push(encLine(''));
   push(encLine(businessDate()+'  '+phTime()));
   push(encLine('Cashier: '+(order.cashier_name||'')));
@@ -981,6 +1007,28 @@ function bind(){
   if(dsel) dsel.addEventListener('change',()=>{
     document.getElementById('pay-discbox').style.display = dsel.value ? 'block':'none';
   });
+  // SUKLI — kinukwenta habang nagta-type, para hindi na mag-isip ang cashier.
+  // Cash lang ito: sa GCash at card ay walang sukli.
+  const tEl=document.getElementById('pay-tendered');
+  const sEl=document.getElementById('pay-sukli');
+  const pEl=document.getElementById('pay-type');
+  const boxEl=document.getElementById('pay-cashbox');
+  const sukliDraw=()=>{
+    if(!sEl) return;
+    const isCash=!pEl || pEl.value==='cash';
+    if(boxEl) boxEl.style.display = isCash ? 'block':'none';
+    const total=cartTotal();
+    const raw=(tEl && tEl.value || '').trim();
+    if(!isCash || raw===''){ sEl.textContent='—'; sEl.style.color=''; return; }
+    const n=Number(raw);
+    if(!isFinite(n)){ sEl.textContent='—'; sEl.style.color=''; return; }
+    const d=n-total;
+    sEl.textContent = peso(Math.abs(d)) + (d<0?' KULANG':'');
+    sEl.style.color = d<0 ? 'var(--bad)' : (d>0?'var(--ok)':'');
+  };
+  if(tEl) tEl.addEventListener('input', sukliDraw);
+  if(pEl) pEl.addEventListener('change', sukliDraw);
+  sukliDraw();
   on('pay-go', finishOrder);
 
   // --- kaha ---
@@ -1145,16 +1193,23 @@ async function finishOrder(){
   const dsel=document.getElementById('pay-disc');
   const disc = dsel ? dsel.value : '';
   const damt = disc ? (Number((document.getElementById('pay-discamt').value||'0'))||0) : 0;
+  const ptype = (document.getElementById('pay-type')||{}).value || 'cash';
+  const total = Math.max(0, cartTotal() - damt);
+  // Ang ibinayad ay para sa SUKLI sa resibo. Kulang o blangko: hindi
+  // ipapalimbag — mas mabuting walang sukli kaysa maling sukli.
+  const tRaw = (document.getElementById('pay-tendered')||{}).value || '';
+  const tend = (ptype==='cash' && String(tRaw).trim()!=='') ? Number(tRaw) : 0;
   const order = {
     id: 'ord_'+uid(),
     order_no: nextOrderNo(),
     cashier_name: session.staff_name,
     ordered_at: new Date().toISOString(),
-    total: Math.max(0, cartTotal() - damt),
-    payment_type: (document.getElementById('pay-type')||{}).value || 'cash',
+    total: total,
+    payment_type: ptype,
     kind: disc==='staff' ? 'staff_meal' : 'sale',
     discount_type: disc || null,
     discount_amount: damt,
+    cash_tendered: (isFinite(tend) && tend >= total) ? tend : 0,
     lines: cart.map((l,i)=>({n:i+1, ...l}))
   };
   // NAITALA MUNA SA TELEPONO. Kahit mamatay ang signal o ang printer,
