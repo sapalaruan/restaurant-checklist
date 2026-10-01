@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <meta name="theme-color" content="#1b3a2f">
 <title>Palaruan Boulevard</title>
-<!-- APP_VERSION_MARK: v2026.09.28-L198 -->
+<!-- APP_VERSION_MARK: v2026.10.01-L204 -->
 <!--
   PALARUAN BRANCH APP — Boulevard.
 
@@ -110,7 +110,7 @@ button.sm{padding:9px 10px;font-size:13px;width:auto}
    KONEKSYON — isang address lamang. Walang susi ng database dito.
    ============================================================ */
 const API = 'https://bipeeundccfcntgzwkkk.supabase.co/functions/v1/branch';
-const APP_VERSION = 'v2026.09.28-L198';
+const APP_VERSION = 'v2026.10.01-L204';
 
 const LS = {
   get(k, d){ try{ const v=localStorage.getItem('blv_'+k); return v==null?d:JSON.parse(v); }catch(e){ return d; } },
@@ -1148,7 +1148,20 @@ function bind(){
   on('mr-sync', ()=>syncQueue(false));
   on('mr-menu', loadMenu);
   on('mr-print', connectPrinter);
-  on('mr-reprint', ()=>{ if(lastOrder) printStub(lastOrder); });
+  // MULING PAG-PRINT. May tala at may abiso kay Owner — sinasabi ito nang
+  // harap-harapan sa nagpi-print, hindi palihim. Ang dahilan ay hinihingi
+  // dahil ang walang dahilan ay siya mismong bandila.
+  on('mr-reprint', async()=>{
+    if(!lastOrder) return;
+    const why=prompt('Bakit ipi-print ulit ang '+lastOrder.order_no+'?\n\n'
+      +'(hal. nasira ang papel, hindi lumabas)\n\n'
+      +'Ang bawat reprint ay may tala at napapadala kay Owner.');
+    if(why===null) return;
+    printStub(lastOrder);
+    const r=await call('reprint', {order_no:lastOrder.order_no, reason:why});
+    if(r && r.ok) toast('✓ Naitala ang reprint (ika-'+(r.ika||1)+').');
+    else toast('⚠️ Na-print, pero hindi naitala. Sabihin kay Owner.', 5000);
+  });
   on('mr-out', ()=>{
     if(queue.length && !confirm(queue.length+' ang hindi pa naipapadala.\n\nMananatili ito sa teleponong ito. Mag-logout pa rin?')) return;
     session=null; LS.del('session'); route='pos'; window.__whoTried=false; render();
