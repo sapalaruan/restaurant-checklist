@@ -4,10 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <meta name="theme-color" content="#1b3a2f">
-<title>Palaruan Boulevard</title>
-<!-- APP_VERSION_MARK: v2026.10.15-L207 -->
+<title>Palaruan Branch</title>
+<!-- APP_VERSION_MARK: v2026.10.16-L210 -->
 <!--
-  PALARUAN BRANCH APP — Boulevard.
+  PALARUAN BRANCH APP — isang file, lahat ng branch.
 
   WALANG SUSI NG DATABASE SA FILE NA ITO. Sinasadya iyon. Ang tanging
   kinakausap nito ay ang Edge Function, at ang tanging hawak nito ay isang
@@ -98,7 +98,7 @@ button.sm{padding:9px 10px;font-size:13px;width:auto}
 </head>
 <body>
 <div class="bar">
-  <div class="t">PALARUAN <span style="opacity:.6">BOULEVARD</span></div>
+  <div class="t">PALARUAN <span style="opacity:.6" id="barbranch">BRANCH</span></div>
   <div class="s" id="barsub">—</div>
 </div>
 <div class="wrap" id="app"></div>
@@ -110,7 +110,7 @@ button.sm{padding:9px 10px;font-size:13px;width:auto}
    KONEKSYON — isang address lamang. Walang susi ng database dito.
    ============================================================ */
 const API = 'https://bipeeundccfcntgzwkkk.supabase.co/functions/v1/branch';
-const APP_VERSION = 'v2026.10.15-L207';
+const APP_VERSION = 'v2026.10.16-L210';
 
 const LS = {
   get(k, d){ try{ const v=localStorage.getItem('blv_'+k); return v==null?d:JSON.parse(v); }catch(e){ return d; } },
@@ -304,7 +304,7 @@ function viewActivate(){
     <label>6-digit mula sa authenticator</label>
     <input id="ac-otp" inputmode="numeric" maxlength="6" placeholder="6 na numero" autocomplete="off">
     <label>Palayaw ng telepono</label>
-    <input id="ac-label" placeholder="hal. Boulevard phone" autocomplete="off">
+    <input id="ac-label" placeholder="hal. telepono sa counter" autocomplete="off">
     <div class="sp"></div>
     <button id="ac-go">Irehistro</button>
     <p class="hint center" style="margin-top:10px">${APP_VERSION}</p>
@@ -377,11 +377,23 @@ function viewPinChange(){
 let posItem = null;     // napiling item, naghihintay ng laki
 // ANG LASA. Pangatlong hakbang: item -> laki -> LASA. Ang listahan ay
 // galing sa Modifiers file ng UTAK (naka-imbak sa server), kaya iisa ang
-// susundan ng Boulevard at ng counter sa Tinago. Ang 'single' na pangkat
+// susundan ng branch at ng counter sa Tinago. Ang 'single' na pangkat
 // ay KAILANGANG pumili; ang 'multiple' ay pwedeng laktawan.
 let posPick = null;     // {it, label, price} — napiling laki, naghihintay ng lasa
 let posFlavors = {};    // {group: [title,...]} — ang napili kada pangkat
 function cartTotal(){ return cart.reduce((t,l)=>t+(Number(l.line_total)||0), 0); }
+// ANG PANGALAN NG BRANCH NA ITO. Tatlo na ang branch, kaya hindi na pwedeng
+// "BOULEVARD" ang nakasulat sa itaas ng bawat telepono. Galing ito sa menu
+// (naka-imbak, kaya gumagana offline); kung wala pa, ang store_id muna.
+function branchName(){
+  if(menu && menu.store_name) return menu.store_name;
+  if(session && session.store_id) return session.store_id;
+  return 'Branch';
+}
+function paintBranchName(){
+  const el=document.getElementById('barbranch');
+  if(el) el.textContent=String(branchName()).toUpperCase();
+}
 // Ang mga pangkat ng lasa ng isang item. Walang pangkat = walang hakbang.
 function flavorGroups(it){ return (it && it.flavor_groups) || []; }
 function flavorNeeded(it){ return flavorGroups(it).length > 0; }
@@ -660,7 +672,7 @@ function viewCarry(){
             value="${balikDraft[x.ingredient_id]!=null?esc(String(balikDraft[x.ingredient_id])):''}"
             placeholder="0" style="flex:1; max-width:110px; margin:0; text-align:right">
         </div>`).join('')
-        : '<p class="hint">Walang hawak ang Boulevard ngayon. Wala munang ibabalik.</p>'}
+        : '<p class="hint">Walang hawak ang '+esc(branchName())+' ngayon. Wala munang ibabalik.</p>'}
       ${bl.length?`<div class="sp"></div>
         <button id="bk-save">Isumite ang bilang</button>
         <p class="hint" style="margin-top:8px">Isang beses lang ito. Pagkatapos, hindi na mababago.</p>`:''}
@@ -706,7 +718,7 @@ function viewCarry(){
             value="${countDraft[x.ingredient_id]!=null?esc(String(countDraft[x.ingredient_id])):''}"
             placeholder="0" style="flex:0 0 110px; max-width:110px; margin:0; text-align:right">
         </div>`).join('')
-        : '<p class="hint">Walang naitalang hawak ang Boulevard. Wala munang bibilangin.</p>'}
+        : '<p class="hint">Walang naitalang hawak ang '+esc(branchName())+'. Wala munang bibilangin.</p>'}
       ${cl.length?`<div class="sp"></div>
         <input id="cnt-note" placeholder="Tala (opsyonal) — hal. nabasa, nalaglag"
           value="${esc(countNote||'')}">
@@ -883,6 +895,7 @@ setInterval(idleCheck, 30000);
   document.addEventListener(ev, touch, {passive:true, capture:true}));
 
 function render(){
+  paintBranchName();
   const app=document.getElementById('app');
   const nav=document.getElementById('nav');
   if(!deviceToken){ app.innerHTML=viewActivate(); nav.style.display='none'; bind(); updateBar(); return; }
