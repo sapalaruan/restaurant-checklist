@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <meta name="theme-color" content="#1b3a2f">
 <title>Palaruan Branch</title>
-<!-- APP_VERSION_MARK: v2026.10.16-L210 -->
+<!-- APP_VERSION_MARK: v2026.10.16-L216 -->
 <!--
   PALARUAN BRANCH APP — isang file, lahat ng branch.
 
@@ -110,7 +110,7 @@ button.sm{padding:9px 10px;font-size:13px;width:auto}
    KONEKSYON — isang address lamang. Walang susi ng database dito.
    ============================================================ */
 const API = 'https://bipeeundccfcntgzwkkk.supabase.co/functions/v1/branch';
-const APP_VERSION = 'v2026.10.16-L210';
+const APP_VERSION = 'v2026.10.16-L216';
 
 const LS = {
   get(k, d){ try{ const v=localStorage.getItem('blv_'+k); return v==null?d:JSON.parse(v); }catch(e){ return d; } },
@@ -136,6 +136,33 @@ let countResult    = null;                  // pagkakaiba, ipinapakita PAGKATAPO
 let balikDraft     = {};
 let rcvDraft       = {};
 let carryMode      = null;                  // null | 'balik' | 'rcv:<id>'
+// LOGBOOK. Ang talang hindi pa naipapadala ay nasa `queue` — kaya ang
+// nakikita ay PINAGSAMA: ang galing sa server, at ang nasa pila pa.
+let logRows        = null;                  // galing sa server
+let logAbot        = null;                  // abot sa susunod na shift, hindi pa nabasa
+let logDraft       = {kind:'', body:'', abot:false, tell:false};
+let logOpen        = false;                 // bukas ba ang form?
+// CHECKLIST. Opening, closing, at ang dalahin na kagamitan.
+let ckRows         = null;                  // task + sagot ngayong araw
+let ckSent         = null;                  // naisumite na ngayong araw
+let ckPetsa        = null;
+let ckPack         = null;                  // ang laging dinadala
+let talaTab        = 'log';                 // 'log' | 'open' | 'close' | 'dala'
+// Ang uri ng tala. Ikaw ang nagsabi ng halimbawa: "may sulat na natanggap".
+const LOG_KINDS = [
+  ['sulat',   '📨', 'Sulat / dokumento'],
+  ['bisita',  '👤', 'Bisita / tao'],
+  ['reklamo', '😠', 'Reklamo'],
+  ['sira',    '🔧', 'Nasira / nabasag'],
+  ['kuryente','⚡', 'Kuryente / tubig / gasul'],
+  ['panahon', '🌧', 'Panahon'],
+  ['abot',    '💬', 'Para sa susunod'],
+  ['iba',     '📝', 'Iba pa']
+];
+const logKindLabel = (k)=>{
+  const f=LOG_KINDS.find(x=>x[0]===k);
+  return f ? f[1]+' '+f[2] : '📝 '+String(k||'');
+};
 let lastTouch   = Date.now();               // huling galaw ng tao
 const IDLE_MS   = 30*60*1000;               // 30 minuto
 let syncing     = false;
@@ -228,6 +255,7 @@ async function syncQueue(silent){
     else if(item.kind==='cash')  res = await call('cash',  {cash:item.payload});
     else if(item.kind==='carry') res = await call('carry', {carry:item.payload});
     else if(item.kind==='item')  res = await call('item',  {item:item.payload});
+    else if(item.kind==='log')   res = await call('log_put', {entry:item.payload});
     else continue;
     const okOne = res && (res.ok===true) &&
       (!res.results || res.results.every(r=>r && r.ok!==false));
@@ -267,6 +295,17 @@ async function refreshFor(r, quiet){
       await loadCarry();
       const after=(pendingCarries||[]).length;
       if(!quiet && after>before) toast('📦 May bagong padala mula sa Tinago.', 4000);
+    }
+    if(r==='tala'){
+      if(talaTab==='log'){
+        const before=(logAbot||[]).length;
+        await loadLog();
+        const after=(logAbot||[]).length;
+        if(!quiet && after>before) toast('💬 May abot galing sa nakaraang shift.', 4000);
+      } else {
+        await loadTasks();
+        if(talaTab==='dala') await loadPack();
+      }
     }
   }catch(e){ /* tahimik — hindi ito dapat makasira ng screen */ }
   finally{ __refreshing=false; }
@@ -914,7 +953,8 @@ function render(){
   if(session.must_change){ app.innerHTML=viewPinChange(); nav.style.display='none'; bind(); updateBar(); return; }
 
   nav.style.display='flex';
-  nav.innerHTML = [['pos','🧾','Order'],['kaha','💵','Kaha'],['carry','📦','Dala'],['more','⋯','Iba pa']]
+  nav.innerHTML = [['pos','🧾','Order'],['kaha','💵','Kaha'],['carry','📦','Dala'],
+                   ['tala','📓','Tala'],['more','⋯','Iba pa']]
     .map(([r,i,l])=>`<button class="${route===r?'on':''}" data-nav="${r}">
       <span class="ic">${i}</span>${l}</button>`).join('');
 
@@ -926,9 +966,264 @@ function render(){
     // Isang beses kada pagbukas: tingnan kung may padalang hinihintay.
     if(pendingCarries===null && navigator.onLine) setTimeout(loadCarry,0);
   }
+  else if(route==='tala'){
+    html = viewTala();
+    // Kinukuha lang ang kailangan ng NAPILING bahagi — hindi lahat nang minsan.
+    if(navigator.onLine){
+      if(talaTab==='log'  && logRows===null) setTimeout(loadLog,0);
+      if((talaTab==='open'||talaTab==='close'||talaTab==='dala') && ckRows===null) setTimeout(loadTasks,0);
+      if(talaTab==='dala' && ckPack===null) setTimeout(loadPack,0);
+    }
+  }
   else html = viewMore();
   app.innerHTML = html;
   bind(); updateBar();
+}
+
+/* ============================================================
+   TALA — ANG LOGBOOK NG SHIFT
+   ============================================================
+   Hiling ni Matt: "may pwedeng ilagay ang current shift or irecord - then
+   mababasa ng next shift. Tsaka nakalagay lahat ng records sa isang tab para
+   may record sila. Halimbawa, may sulat na natanggap today."
+
+   Dalawang trabaho:
+     1. TALA — nangyari ito, may record kami.
+     2. ABOT — para sa susunod na shift, at may bakas kung NABASA na nila.
+
+   WALANG DELETE. Tuntunin ni Matt: hindi mabubura ang audit trail ng kahit
+   sino maliban sa kanya. Kaya pagkasave, nakasulat na — ang pwede lang ay
+   ipawalang-bisa ni Owner sa MAIN APP, at nananatili ang orihinal.
+
+   OFFLINE: ang talang hindi pa naipapadala ay nasa pila, at NAKIKITA pa rin
+   dito na may tanda — para hindi isipin ng staff na nawala ang sinulat niya. */
+async function loadLog(){
+  if(!session || !navigator.onLine) return;
+  const r = await call('log_list', {days:30});
+  if(r && r.ok){
+    logRows = r.rows || [];
+    logAbot = r.abot || [];
+    if(route==='tala') render();
+  }
+}
+// Ang nasa pila pa — ginagawang kamukha ng galing sa server para isang
+// listahan lang ang binabasa nila.
+async function loadTasks(){
+  if(!session || !navigator.onLine) return;
+  const r = await call('tasks_list', {});
+  if(r && r.ok){ ckRows=r.rows||[]; ckSent=r.naisumite||[]; ckPetsa=r.petsa||null;
+    if(route==='tala') render(); }
+}
+async function loadPack(){
+  if(!session || !navigator.onLine) return;
+  const r = await call('pack_view', {});
+  if(r && r.ok){ ckPack=r.rows||[]; if(route==='tala') render(); }
+}
+function logQueued(){
+  return queue.filter(q=>q.kind==='log').map(q=>({
+    id: q.payload.id, kind: q.payload.kind, body: q.payload.body,
+    by_name: q.payload.by_name, petsa: q.payload.business_date,
+    for_next_shift: !!q.payload.for_next_shift,
+    tell_owner: !!q.payload.tell_owner,
+    kailan: 'hindi pa naipadala', hintay: true
+  }));
+}
+function viewTala(){
+  const tabs=[['log','📓','Logbook'],['open','🌅','Opening'],
+              ['close','🌙','Closing'],['dala','🎒','Dalahin']];
+  const head=`<div class="card" style="padding:8px">
+    <div class="grid" style="grid-template-columns:repeat(4,1fr);gap:6px">
+      ${tabs.map(([k,i,l])=>`<button class="tile${talaTab===k?' on':''}" data-talatab="${k}"
+        style="text-align:center;padding:8px 4px;${talaTab===k?'border-color:#1b3a2f;background:#eaf3ee':''}">
+        <b style="font-size:12px">${i}<br>${esc(l)}</b></button>`).join('')}
+    </div></div>`;
+  if(talaTab==='open')  return head + viewChecklist('opening');
+  if(talaTab==='close') return head + viewChecklist('closing');
+  if(talaTab==='dala')  return head + viewDalahin();
+  return head + viewLogbook();
+}
+
+/* ANG CHECKLIST. Kapareho ng MAIN app: tsek kung nagawa, o LAKTAW na may
+   DAHILAN. Ang laktaw na walang dahilan ay walang kwentang tala — kaya
+   hinihingi ito bago tanggapin. */
+function viewChecklist(which){
+  if(ckRows===null){
+    return `<div class="card"><h2>${which==='opening'?'🌅 Opening':'🌙 Closing'}</h2>
+      <p class="hint">${navigator.onLine?'Kinukuha...':'Walang signal. Kailangan ng signal para makuha ang listahan.'}</p>
+      ${navigator.onLine?'':'<div class="sp"></div><button class="ghost" id="ck-retry">Subukan ulit</button>'}</div>`;
+  }
+  const rows=(ckRows||[]).filter(r=>r.checklist===which);
+  if(!rows.length){
+    return `<div class="card"><h2>${which==='opening'?'🌅 Opening':'🌙 Closing'}</h2>
+      <p class="hint">Wala pang nakalagay na task para sa tindahan na ito.
+        Ipaayos sa Owner sa MAIN APP.</p></div>`;
+  }
+  const sent=(ckSent||[]).find(x=>x.checklist===which);
+  const done=rows.filter(r=>r.status==='done').length;
+  const skip=rows.filter(r=>r.status==='skip').length;
+  const wala=rows.filter(r=>!r.status).length;
+  const pri=(p)=>{const l=String(p||'').toLowerCase();
+    return l==='very high'?'<span class="pill bad">mahalaga</span>'
+         : l==='high'?'<span class="pill warn">mataas</span>':'';};
+  return `<div class="card">
+    <h2>${which==='opening'?'🌅 Opening':'🌙 Closing'} · ${esc(ckPetsa||businessDate())}</h2>
+    <div class="line"><span>Nagawa</span><b>${done} / ${rows.length}</b></div>
+    ${skip?`<div class="line"><span>Hindi nagawa (may dahilan)</span><b>${skip}</b></div>`:''}
+    ${wala?`<div class="line"><span>Walang sagot pa</span><b>${wala}</b></div>`:''}
+    ${sent?`<div class="note ok" style="margin-top:8px">✓ Naisumite na ni ${esc(sent.by_name||'?')}
+      ${sent.oras?'· '+esc(sent.oras):''} — ${sent.n_done}/${sent.n_task} ang nagawa.
+      Pwede pa ring ituloy ang kulang; isumite ulit pagkatapos.</div>`:''}
+  </div>
+  <div class="card">
+    ${rows.map(r=>`<div style="border-top:1px solid var(--line);padding:8px 0">
+      <div style="font-size:13px">
+        ${r.status==='done'?'✅':r.status==='skip'?'⚠️':'⬜'} <b>${esc(r.text)}</b>
+        ${pri(r.priority)}${r.time?' <span class="hint">'+esc(r.time)+'</span>':''}
+      </div>
+      ${r.status?`<div class="hint">${r.status==='done'?'Nagawa':'HINDI nagawa'} ni
+        ${esc(r.done_by||'?')}${r.oras?' · '+esc(r.oras):''}
+        ${r.status==='skip'&&r.reason?'<br>Dahilan: '+esc(r.reason):''}</div>`:''}
+      <div class="row" style="margin-top:6px">
+        <button class="${r.status==='done'?'':'ghost'} sm" data-ckdone="${esc(r.id)}">
+          ${r.status==='done'?'✓ Nagawa':'Nagawa'}</button>
+        <button class="${r.status==='skip'?'warn':'ghost'} sm" data-ckskip="${esc(r.id)}">
+          ${r.status==='skip'?'⚠️ May dahilan':'Hindi nagawa'}</button>
+        ${r.status?`<button class="ghost sm" data-ckclear="${esc(r.id)}">Alisin</button>`:''}
+      </div>
+    </div>`).join('')}
+  </div>
+  <div class="card">
+    <button id="ck-submit" data-cksubmit="${which}">📤 Isumite ang ${which==='opening'?'opening':'closing'}</button>
+    <p class="hint" style="margin-top:8px">Tinatanggap ito kahit may kulang —
+      <b>pero naitatala ang kulang at ipinapaalam kay Owner</b>. Mas mabuting
+      sabihin ang totoo kaysa magtsek ng hindi ginawa.</p>
+  </div>`;
+}
+
+/* ANG DALAHIN. Dalawang bahagi:
+     1. KAGAMITAN — tent, stove, gasul, kaldero. Hindi stock, paroo't parito
+        lang araw-araw. Tsek lang.
+     2. CONSUMABLE — ang laging dinadala. Dito NAKIKITA lang; ang dami ay
+        sa PADALA galing sa Tinago, at Owner/Manager ang naglalagay. */
+function viewDalahin(){
+  const gamit=(ckRows||[]).filter(r=>r.checklist==='dalahin');
+  const pack=(ckPack||[]);
+  const sent=(ckSent||[]).find(x=>x.checklist==='dalahin');
+  const done=gamit.filter(r=>r.status==='done').length;
+  return `<div class="card">
+    <h2>🎒 Ang dalahin · ${esc(ckPetsa||businessDate())}</h2>
+    <p class="hint">Pop-up ang tindahang ito — walang naiiwan. Ito ang listahan
+      para hindi na hanapin araw-araw.</p>
+  </div>
+  <div class="card">
+    <h2>Kagamitan${gamit.length?' · '+done+' / '+gamit.length:''}</h2>
+    ${gamit.length? gamit.map(r=>`<div style="border-top:1px solid var(--line);padding:7px 0">
+      <div style="font-size:13px">${r.status==='done'?'✅':r.status==='skip'?'⚠️':'⬜'}
+        <b>${esc(r.text)}</b></div>
+      ${r.status==='skip'&&r.reason?`<div class="hint">Dahilan: ${esc(r.reason)}</div>`:''}
+      <div class="row" style="margin-top:5px">
+        <button class="${r.status==='done'?'':'ghost'} sm" data-ckdone="${esc(r.id)}">
+          ${r.status==='done'?'✓ Dala':'Dala'}</button>
+        <button class="${r.status==='skip'?'warn':'ghost'} sm" data-ckskip="${esc(r.id)}">
+          ${r.status==='skip'?'⚠️ Wala':'Wala'}</button>
+        ${r.status?`<button class="ghost sm" data-ckclear="${esc(r.id)}">Alisin</button>`:''}
+      </div></div>`).join('')
+    : `<p class="hint">${ckRows===null
+        ? (navigator.onLine?'Kinukuha...':'Walang signal.')
+        : 'Wala pang nakalagay na kagamitan. Ipaayos sa Owner sa MAIN APP.'}</p>`}
+    ${gamit.length?`<div class="sp"></div>
+      <button data-cksubmit="dalahin">📤 Isumite ang dalahin</button>
+      ${sent?`<p class="hint" style="margin-top:6px">✓ Naisumite na ni ${esc(sent.by_name||'?')}
+        ${sent.oras?'· '+esc(sent.oras):''}.</p>`:''}`:''}
+  </div>
+  <div class="card">
+    <h2>Laging dinadalang stock${pack.length?' · '+pack.length:''}</h2>
+    <p class="hint">Ito ang dumadaan sa <b>PADALA</b> galing sa Tinago.
+      Hindi dito inilalagay ang dami — tingnan ang <b>Dala</b> tab para sa
+      padalang dumating na.</p>
+    ${pack.length? pack.map(p=>`<div class="line">
+      <span style="font-size:13px">${p.naitugma?'📦':'⚠️'} <b>${esc(p.name)}</b>
+        ${p.unit_hint?'<span class="hint"> ('+esc(p.unit_hint)+')</span>':''}
+        ${p.naitugma?'':'<br><span class="hint">hindi pa naitugma sa inventory ni Owner</span>'}</span>
+    </div>`).join('')
+    : `<p class="hint">${ckPack===null
+        ? (navigator.onLine?'Kinukuha...':'Walang signal.')
+        : 'Wala pang listahan. Ipaayos sa Owner sa MAIN APP.'}</p>`}
+  </div>`;
+}
+
+function viewLogbook(){
+  const pila = logQueued();
+  const rows = pila.concat(logRows || []);
+  const abot = (logAbot || []);
+  return `
+  ${abot.length?`<div class="card">
+    <h2>⚠️ Para sa iyo, galing sa nakaraang shift</h2>
+    <p class="hint">Hindi pa ito nababasa. Pindutin ang "Nabasa ko na" kapag
+      naintindihan mo — mapupunta sa tala kung sino at kailan.</p>
+    ${abot.map(a=>`<div class="note" style="margin-top:8px">
+      <b>${esc(logKindLabel(a.kind))}</b>
+      <div style="margin:4px 0">${esc(a.body)}</div>
+      <div class="hint">${esc(a.by_name||'?')} · ${esc(a.kailan||'')}</div>
+      <div class="sp"></div>
+      <button class="ghost sm" data-logack="${esc(a.id)}">Nabasa ko na</button>
+    </div>`).join('')}
+  </div>`:''}
+
+  <div class="card">
+    <h2>Magtala</h2>
+    ${logOpen ? `
+      <label>Anong uri?</label>
+      <div class="grid" style="margin-top:6px">
+        ${LOG_KINDS.map(([k,i,l])=>{
+          const on=logDraft.kind===k;
+          return `<button class="tile${on?' on':''}" data-logkind="${k}"
+            style="${on?'border-color:#1b3a2f;background:#eaf3ee':''}">
+            <b>${on?'✓ ':''}${i} ${esc(l)}</b></button>`;}).join('')}
+      </div>
+      <label>Ano ang nangyari?</label>
+      <textarea id="lg-body" rows="4" placeholder="Hal.: May sulat galing sa barangay, tungkol sa permit. Nasa ibabaw ng printer.">${esc(logDraft.body)}</textarea>
+      <div class="sp"></div>
+      <label class="line" style="cursor:pointer">
+        <span>💬 Para sa susunod na shift<br><span class="hint">Lalabas sa itaas nila hangga't hindi nila sinabing nabasa na.</span></span>
+        <input type="checkbox" id="lg-abot" ${logDraft.abot?'checked':''}>
+      </label>
+      <label class="line" style="cursor:pointer">
+        <span>📣 Ipaalam agad sa Owner<br><span class="hint">Magpapadala ng Telegram. Kung hindi, makikita pa rin ito ni Owner sa MAIN APP.</span></span>
+        <input type="checkbox" id="lg-tell" ${logDraft.tell?'checked':''}>
+      </label>
+      <div class="sp"></div>
+      <button id="lg-save">Itala</button>
+      <div class="sp"></div>
+      <button class="ghost" id="lg-cancel">Huwag na</button>
+      <p class="hint" style="margin-top:10px">Pagka-itala, <b>hindi na mababago o mabubura</b>.
+        Ganito ang logbook — kaya siguraduhin bago pindutin.</p>
+    ` : `
+      <p class="hint">Dito isinusulat ang nangyari ngayong shift: sulat na natanggap,
+        bisita, reklamo, nasira. Nababasa ng susunod na shift at ni Owner.</p>
+      <button id="lg-new">✍️ Magtala ng bago</button>
+    `}
+  </div>
+
+  <div class="card">
+    <h2>Mga tala${rows.length?' · '+rows.length:''}</h2>
+    ${rows.length ? rows.map(r=>`<div class="line" style="align-items:flex-start">
+      <span style="flex:1">
+        <b>${esc(logKindLabel(r.kind))}</b>${r.voided?' <span class="pill bad">pinawalang-bisa</span>':''}
+        <div style="margin:3px 0">${esc(r.body)}</div>
+        <span class="hint">${esc(r.by_name||'?')} · ${esc(r.kailan||r.petsa||'')}
+          ${r.hintay?' · <b>⏳ nasa pila pa</b>':''}
+          ${r.for_next_shift ? (r.read_by
+              ? ' · ✓ nabasa ni '+esc(r.read_by)+(r.nabasa_kailan?' ('+esc(r.nabasa_kailan)+')':'')
+              : ' · 💬 hinihintay pang mabasa') : ''}
+          ${r.tell_owner?' · 📣 naipaalam':''}</span>
+        ${r.voided&&r.void_reason?`<div class="hint">Dahilan: ${esc(r.void_reason)}</div>`:''}
+      </span>
+    </div>`).join('')
+    : `<p class="hint">${logRows===null
+        ? (navigator.onLine?'Kinukuha...':'Walang signal — hindi makuha ang mga lumang tala. Makakapagtala pa rin ka.')
+        : 'Wala pang tala sa loob ng 30 araw.'}</p>`}
+  </div>`;
 }
 
 function viewMore(){
@@ -1260,6 +1555,105 @@ function bind(){
   });
 
   // --- iba pa ---
+  // --- TALA: paglipat ng bahagi ---
+  document.querySelectorAll('[data-talatab]').forEach(b=>b.addEventListener('click',()=>{
+    talaTab=b.dataset.talatab; logOpen=false; render(); refreshFor('tala', true);
+  }));
+  on('ck-retry', ()=>{ loadTasks(); loadPack(); });
+
+  // --- CHECKLIST: tsek, laktaw, alis ---
+  const ckSet=async(id, status, reason)=>{
+    if(busy) return;
+    if(!navigator.onLine){ toast('Kailangan ng signal para sa checklist.'); return; }
+    busy=true;
+    try{
+      const r=await call('task_set', {task_id:id, status:status, reason:reason||''});
+      if(r && r.ok){ await loadTasks(); }
+      else toast('❌ '+((r&&r.reason)||'Hindi naitala.'), 4000);
+    }catch(e){ toast('Hindi naitala.'); }
+    finally{ busy=false; render(); }
+  };
+  document.querySelectorAll('[data-ckdone]').forEach(b=>b.addEventListener('click',()=>
+    ckSet(b.dataset.ckdone,'done')));
+  document.querySelectorAll('[data-ckclear]').forEach(b=>b.addEventListener('click',()=>
+    ckSet(b.dataset.ckclear,'clear')));
+  document.querySelectorAll('[data-ckskip]').forEach(b=>b.addEventListener('click',()=>{
+    // ANG LAKTAW AY KAILANGAN NG DAHILAN. Iyon ang buong punto — ang
+    // "hindi ko nagawa" na walang dahilan ay walang kwentang tala.
+    const why=prompt('Bakit hindi nagawa?\n\nMababasa ito ni Owner at ng susunod na shift.');
+    if(why===null) return;
+    if(String(why).trim().length<3){ toast('Isulat kung bakit.'); return; }
+    ckSet(b.dataset.ckskip,'skip',String(why).trim());
+  }));
+  document.querySelectorAll('[data-cksubmit]').forEach(b=>b.addEventListener('click',async()=>{
+    if(busy) return;
+    if(!navigator.onLine){ toast('Kailangan ng signal para isumite.'); return; }
+    const which=b.dataset.cksubmit;
+    const rows=(ckRows||[]).filter(r=>r.checklist===which);
+    const wala=rows.filter(r=>!r.status).length;
+    if(wala>0 && !confirm('May '+wala+' task na WALANG SAGOT pa.\n\n'
+      +'Tatanggapin ito, pero maitatala ang kulang at makikita ni Owner.\n\n'
+      +'Ituloy?')) return;
+    busy=true;
+    try{
+      const r=await call('checklist_put', {checklist:which});
+      if(r && r.ok){
+        toast(r.kulang>0 ? '📤 Naisumite, may '+r.kulang+' kulang.' : '✓ Naisumite, kumpleto.', 4000);
+        await loadTasks();
+      } else toast('❌ '+((r&&r.reason)||'Hindi naisumite.'), 4000);
+    }catch(e){ toast('Hindi naisumite.'); }
+    finally{ busy=false; render(); }
+  }));
+
+  // --- LOGBOOK ---
+  on('lg-new',    ()=>{ logOpen=true;  render(); });
+  on('lg-cancel', ()=>{ logOpen=false; logDraft={kind:'',body:'',abot:false,tell:false}; render(); });
+  document.querySelectorAll('[data-logkind]').forEach(b=>b.addEventListener('click',()=>{
+    // Itago muna ang nasulat bago magpinta ulit, kundi mawawala ang tinipa.
+    const t=document.getElementById('lg-body'); if(t) logDraft.body=t.value;
+    const a=document.getElementById('lg-abot'); if(a) logDraft.abot=a.checked;
+    const o=document.getElementById('lg-tell'); if(o) logDraft.tell=o.checked;
+    logDraft.kind = b.dataset.logkind;
+    // Ang uring "Para sa susunod" ay abot na mismo — hindi na kailangang
+    // may hiwalay pang tsek.
+    if(logDraft.kind==='abot') logDraft.abot=true;
+    render();
+  }));
+  on('lg-save', ()=>{
+    if(busy) return;
+    const t=document.getElementById('lg-body');
+    const body=(t?t.value:'').trim();
+    const abot=!!(document.getElementById('lg-abot')||{}).checked;
+    const tell=!!(document.getElementById('lg-tell')||{}).checked;
+    if(!logDraft.kind){ toast('Piliin muna kung anong uri.'); return; }
+    if(body.length<3){ toast('Isulat kung ano ang nangyari.'); return; }
+    if(!confirm('Itala ito?\n\n'+logKindLabel(logDraft.kind)+'\n'+body
+      +(abot?'\n\n💬 Lalabas sa susunod na shift.':'')
+      +(tell?'\n📣 Ipaaalam agad sa Owner.':'')
+      +'\n\nPagkatapos nito, HINDI na ito mababago o mabubura.')) return;
+    enqueue('log', {
+      id:'lg_'+uid(), kind:logDraft.kind, body:body,
+      for_next_shift:abot, tell_owner:tell,
+      by_name:(session&&session.staff_name)||null,
+      business_date:businessDate(), at_ts:new Date().toISOString()
+    });
+    logOpen=false; logDraft={kind:'',body:'',abot:false,tell:false};
+    render();
+    toast(navigator.onLine?'✓ Naitala.':'✓ Naitala. Ipapadala kapag may signal.');
+    if(navigator.onLine) syncQueue(true).then(()=>loadLog());
+  });
+  document.querySelectorAll('[data-logack]').forEach(b=>b.addEventListener('click',async()=>{
+    if(busy) return;
+    if(!navigator.onLine){ toast('Kailangan ng signal para dito.'); return; }
+    busy=true;
+    try{
+      const r=await call('log_ack', {id:b.dataset.logack});
+      if(r && r.ok){ toast(r.na_una_na?'Nabasa na ito ni '+(r.read_by||'iba'):'✓ Naitala na nabasa mo.'); await loadLog(); }
+      else toast('❌ '+((r&&r.reason)||'Hindi naitala.'), 4000);
+    }catch(e){ toast('Hindi naitala.'); }
+    finally{ busy=false; render(); }
+  }));
+
   on('mr-sync', ()=>syncQueue(false));
   on('mr-menu', loadMenu);
   on('mr-print', connectPrinter);
