@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <meta name="theme-color" content="#1b3a2f">
 <title>Palaruan Branch</title>
-<!-- APP_VERSION_MARK: v2026.10.17-L221 -->
+<!-- APP_VERSION_MARK: v2026.10.17-L224 -->
 <!--
   PALARUAN BRANCH APP — isang file, lahat ng branch.
 
@@ -110,7 +110,7 @@ button.sm{padding:9px 10px;font-size:13px;width:auto}
    KONEKSYON — isang address lamang. Walang susi ng database dito.
    ============================================================ */
 const API = 'https://bipeeundccfcntgzwkkk.supabase.co/functions/v1/branch';
-const APP_VERSION = 'v2026.10.17-L221';
+const APP_VERSION = 'v2026.10.17-L224';
 
 const LS = {
   get(k, d){ try{ const v=localStorage.getItem('blv_'+k); return v==null?d:JSON.parse(v); }catch(e){ return d; } },
@@ -217,7 +217,12 @@ function uid(){
    ============================================================ */
 async function call(path, body, opts){
   const h = {'Content-Type':'application/json'};
-  if(session && session.token) h['x-branch-session'] = session.token;
+  // ANG SARILING TOKEN. Ginagamit lang ito ng naka-pilang LABAS: pagkatapos
+  // ng logout ay wala nang session, pero kailangan pa ring maipadala ang
+  // litrato ng paglabas kapag bumalik ang signal. Dala ng item ang token
+  // nito mismo.
+  const tok = (opts && opts.token) || (session && session.token) || null;
+  if(tok) h['x-branch-session'] = tok;
   if(deviceToken) h['x-branch-token'] = deviceToken;
   const ctl = new AbortController();
   const to = setTimeout(()=>ctl.abort(), (opts&&opts.timeout)||12000);
@@ -227,7 +232,11 @@ async function call(path, body, opts){
     clearTimeout(to);
     let j=null;
     try{ j = await r.json(); }catch(e){ j={ok:false, reason:'Hindi mabasa ang sagot ng server.'}; }
-    if(j && j.ok===false && (j.code==='no_session'||j.code==='expired'||j.code==='revoked')){
+    // HUWAG PATAYIN ANG SESSION NG IBA. Kapag sariling token ang ginamit
+    // (naka-pilang labas), ang patay na token na iyon ay HINDI dahilan para
+    // itapon ang session ng taong nakapasok na ngayon.
+    if(j && j.ok===false && !(opts && opts.token)
+       && (j.code==='no_session'||j.code==='expired'||j.code==='revoked')){
       session=null; LS.del('session');
       if(j.code==='revoked'){ deviceToken=null; deviceId=null; LS.del('device_token'); LS.del('device_id'); }
       render();
@@ -257,13 +266,31 @@ function enqueue(kind, payload){
   return ok;
 }
 async function syncQueue(silent){
-  if(syncing || !session) return;
+  if(syncing) return;
+  // Ang LABAS ay may sariling token, kaya naipapadala ito kahit wala nang
+  // nakapasok. Kung hindi, maiiwan ang litrato ng paglabas hanggang sa
+  // susunod na pasok — bukas na iyon, huli na ang balita.
+  const mayShift = queue.some(x=>x.kind==='shift' && x.payload && x.payload.__tok);
+  if(!session && !mayShift) return;
   if(!queue.length){ if(!silent) toast('Wala nang hinihintay.'); return; }
   syncing = true; updateBar();
   const left = [];
   for(const item of queue.slice()){
     let res;
-    if(item.kind==='order')      res = await call('order', {order:item.payload});
+    const sariling = item.kind==='shift' && item.payload && item.payload.__tok;
+    // KAPAG WALANG NAKAPASOK, ang may sariling token lang ang pinapadala.
+    // Kung hindi: sasagutin ng server ng no_session ang order, at ang
+    // no_session ay HINDI offline — kaya ituturing itong "tinanggihan" at
+    // ITATAPON ang benta. Nangyari na ba? Hindi — dahil dati ay umaatras
+    // ang buong syncQueue kapag walang session. Ngayong hindi na, ito na
+    // ang kumukupkop sa pila.
+    if(!session && !sariling){ left.push(item); continue; }
+    if(item.kind==='shift'){
+      const p = Object.assign({}, item.payload); const t = p.__tok; delete p.__tok;
+      res = await call(p.kind==='out' ? 'shift_out' : 'shift_in', p,
+                       {timeout:60000, token:t||null});
+    }
+    else if(item.kind==='order') res = await call('order', {order:item.payload});
     else if(item.kind==='cash')  res = await call('cash',  {cash:item.payload});
     else if(item.kind==='carry') res = await call('carry', {carry:item.payload});
     else if(item.kind==='item')  res = await call('item',  {item:item.payload});
@@ -1049,10 +1076,12 @@ function gpsNow(){
   });
 }
 
-async function camOpen(taskId, text){
+// purpose: 'task' (checklist) o 'shift' (pasok/labas). Ang 'task' ang
+// default, kaya walang nagbago sa dating tawag.
+async function camOpen(taskId, text, purpose, kind){
   if(camBusy) return;
   camBusy=true;
-  camTask={id:taskId, text:text}; camGps=null;
+  camTask={id:taskId, text:text, purpose:purpose||'task', kind:kind||null}; camGps=null;
   render();
   // Simulan agad ang GPS — matagal ito, habang nakatutok pa lang siya.
   gpsNow().then(g=>{ camGps=g; const el=document.getElementById('cam-gps');
@@ -1092,6 +1121,7 @@ async function camShoot(){
   const v=document.getElementById('cam-video');
   if(!v || !v.videoWidth){ toast('Hintayin munang lumabas ang larawan.'); return; }
   camBusy=true;
+  const layon=camTask.purpose||'task', anoKind=camTask.kind||null;
   const kuha=new Date().toISOString();     // ORAS NG PAGKUHA — ito ang opisyal
   try{
     const maxW=1024;
@@ -1102,11 +1132,17 @@ async function camShoot(){
     const b64=c.toDataURL('image/jpeg', 0.5);
     const task=camTask.id, g=camGps||{};
     camClose();
+    const lugar={lat:(g.lat!=null?g.lat:null), lng:(g.lng!=null?g.lng:null),
+                 acc:(g.acc!=null?g.acc:null), captured_at:kuha};
     // Sa pila muna — doon ito ipapadala, kaya pareho ang daan kahit may
     // signal o wala. Hindi nawawala ang litrato kahit mamatay ang app.
-    const naitabi = enqueue('taskphoto', {task_id:task, status:'done', reason:'',
-      photo_b64:b64, lat:(g.lat!=null?g.lat:null), lng:(g.lng!=null?g.lng:null),
-      acc:(g.acc!=null?g.acc:null), captured_at:kuha});
+    if(layon==='shift'){
+      shiftEnqueue(anoKind, b64, lugar);
+      camBusy=false;
+      return;
+    }
+    const naitabi = enqueue('taskphoto', Object.assign(
+      {task_id:task, status:'done', reason:'', photo_b64:b64}, lugar));
     if(naitabi){
       toast(navigator.onLine ? '📷 Kuha na. Ipinapadala…'
                              : '📷 Kuha na. Ipapadala pagkaroon ng signal.', 4000);
@@ -1120,6 +1156,48 @@ async function camShoot(){
   }
   camBusy=false;
 }
+/* ---- PASOK AT LABAS ----
+   Kada pasok at kada labas, may litrato at GPS.
+
+   HINDI ITO HUMAHARANG. Kung tumanggi ang camera, kung walang permiso, o
+   kung kinansela — NAITATALA PA RIN ang pasok o labas, pero WALANG LITRATO
+   ang nakasulat, at iyon ang lumalabas sa Telegram at sa dashboard ni Owner.
+   Mas mabuti ang talang may butas kaysa sa staff na hindi makapagbenta — at
+   mas mabuti ang nakikitang butas kaysa sa katahimikan. */
+function shiftEnqueue(kind, b64, lugar){
+  const tok = (session && session.token) || null;
+  const naitabi = enqueue('shift', Object.assign(
+    {kind:kind, photo_b64: b64||null, __tok: tok}, lugar||{}));
+  if(kind==='out'){
+    // Ngayon lang pinapatay ang session — pagkatapos maitabi ang tala.
+    // Dala ng item ang sariling token nito, kaya kaya pa rin itong
+    // ipadala mamaya kahit wala nang nakapasok.
+    session=null; LS.del('session'); route='pos'; window.__whoTried=false;
+    toast(b64 ? (navigator.onLine ? '📷 Naitala ang paglabas. Ipinapadala…'
+                                  : '📷 Naitala ang paglabas. Ipapadala pagkaroon ng signal.')
+              : '⚠️ Naitala ang paglabas PERO WALANG LITRATO.', 5000);
+  } else if(naitabi){
+    toast(b64 ? (navigator.onLine ? '📷 Naitala ang pasok. Ipinapadala…'
+                                  : '📷 Naitala ang pasok. Ipapadala pagkaroon ng signal.')
+              : '⚠️ Naitala ang pasok PERO WALANG LITRATO.', 5000);
+  }
+  render();
+  if(navigator.onLine) syncQueue(true);
+}
+async function shiftCapture(kind){
+  camTask=null;
+  await camOpen('shift_'+kind, kind==='in' ? 'PASOK — kunan ang tindahan'
+                                           : 'LABAS — kunan ang tindahan', 'shift', kind);
+  // Hindi nabuksan ang camera: itala pa rin, may babala.
+  if(!camTask) shiftEnqueue(kind, null, {captured_at:new Date().toISOString()});
+}
+// Ang pagkansela ay HINDI pagtakas. Naitatala pa rin, walang litrato.
+function camCancel(){
+  const layon=camTask&&camTask.purpose, k=camTask&&camTask.kind;
+  camClose();
+  if(layon==='shift') shiftEnqueue(k, null, {captured_at:new Date().toISOString()});
+}
+
 function viewCamera(){
   const g=camGps;
   return `<div class="card">
@@ -1480,6 +1558,9 @@ function bind(){
     pendingCarries=null; balikList=null; countList=null;
     loadCarry();
     render();
+    // ANG LITRATO NG PASOK — pagkatapos nang mabuksan ang app, hindi bago,
+    // para kahit tumanggi ang camera ay nakakapagbenta pa rin siya.
+    shiftCapture('in');
   });
 
   // --- palit ng PIN ---
@@ -1756,7 +1837,7 @@ function bind(){
     camOpen(id, r?r.text:'Litrato');
   }));
   on('cam-shoot',  camShoot);
-  on('cam-cancel', camClose);
+  on('cam-cancel', camCancel);
   document.querySelectorAll('[data-ckclear]').forEach(b=>b.addEventListener('click',()=>
     ckSet(b.dataset.ckclear,'clear')));
   document.querySelectorAll('[data-ckskip]').forEach(b=>b.addEventListener('click',()=>{
@@ -1855,7 +1936,11 @@ function bind(){
   });
   on('mr-out', ()=>{
     if(queue.length && !confirm(queue.length+' ang hindi pa naipapadala.\n\nMananatili ito sa teleponong ito. Mag-logout pa rin?')) return;
-    session=null; LS.del('session'); route='pos'; window.__whoTried=false; render();
+    // ANG LITRATO NG PAGLABAS. Ang shiftEnqueue na ang pumapatay ng session
+    // — pagkatapos maitabi ang tala, hindi bago. Lahat ng daan (kuha,
+    // kansela, palyadong camera) ay humahantong sa logout; ang litrato lang
+    // ang pwedeng mawala, hindi ang tala.
+    shiftCapture('out');
   });
 }
 
