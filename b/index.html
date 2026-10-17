@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <meta name="theme-color" content="#1b3a2f">
 <title>Palaruan Branch</title>
-<!-- APP_VERSION_MARK: v2026.10.16-L219 -->
+<!-- APP_VERSION_MARK: v2026.10.17-L221 -->
 <!--
   PALARUAN BRANCH APP — isang file, lahat ng branch.
 
@@ -110,11 +110,15 @@ button.sm{padding:9px 10px;font-size:13px;width:auto}
    KONEKSYON — isang address lamang. Walang susi ng database dito.
    ============================================================ */
 const API = 'https://bipeeundccfcntgzwkkk.supabase.co/functions/v1/branch';
-const APP_VERSION = 'v2026.10.16-L219';
+const APP_VERSION = 'v2026.10.17-L221';
 
 const LS = {
   get(k, d){ try{ const v=localStorage.getItem('blv_'+k); return v==null?d:JSON.parse(v); }catch(e){ return d; } },
-  set(k, v){ try{ localStorage.setItem('blv_'+k, JSON.stringify(v)); }catch(e){} },
+  // Ibinabalik kung NAITABI ba talaga. Mahalaga ito sa litrato: malaki ito,
+  // at kapag napuno ang telepono, dating tahimik itong bumabagsak — at
+  // aakalain ng staff na naitala na.
+  set(k, v){ try{ localStorage.setItem('blv_'+k, JSON.stringify(v)); return true; }
+             catch(e){ return false; } },
   del(k){ try{ localStorage.removeItem('blv_'+k); }catch(e){} }
 };
 
@@ -241,8 +245,16 @@ async function call(path, body, opts){
    ============================================================ */
 function enqueue(kind, payload){
   queue.push({kind, payload, at: Date.now()});
-  LS.set('queue', queue);
+  const ok = LS.set('queue', queue);
+  // HINDI NAITABI SA TELEPONO. Nasa memorya pa ito at ipapadala kung may
+  // signal, PERO mawawala kapag isinara ang app. Dapat niyang malaman —
+  // ang tahimik na pagkawala ang pinakamasama.
+  if(!ok){
+    toast('⚠️ PUNO ANG TELEPONO. Hindi naitabi ang hindi pa naipapadala — '
+         +'huwag isara ang app hangga\'t walang signal.', 9000);
+  }
   updateBar();
+  return ok;
 }
 async function syncQueue(silent){
   if(syncing || !session) return;
@@ -256,6 +268,9 @@ async function syncQueue(silent){
     else if(item.kind==='carry') res = await call('carry', {carry:item.payload});
     else if(item.kind==='item')  res = await call('item',  {item:item.payload});
     else if(item.kind==='log')   res = await call('log_put', {entry:item.payload});
+    // Ang litrato ng task — malaki ito, kaya isa-isa, at may mas mahabang
+    // hintay bago sumuko.
+    else if(item.kind==='taskphoto') res = await call('task_set', item.payload, {timeout:60000});
     else continue;
     const okOne = res && (res.ok===true) &&
       (!res.results || res.results.every(r=>r && r.ok!==false));
@@ -952,6 +967,15 @@ function render(){
   // pwede nilang sabihing ikaw ang gumawa ng hindi mo ginawa.
   if(session.must_change){ app.innerHTML=viewPinChange(); nav.style.display='none'; bind(); updateBar(); return; }
 
+  // Kapag bukas ang camera, ito lang ang nasa screen — walang ibang
+  // mapipindot habang nakatutok, at hindi mawawala ang stream.
+  if(camTask){
+    nav.style.display='none';
+    app.innerHTML=viewCamera(); bind(); updateBar();
+    const v=document.getElementById('cam-video');
+    if(v && camStream){ v.srcObject=camStream; v.play().catch(()=>{}); }
+    return;
+  }
   nav.style.display='flex';
   nav.innerHTML = [['pos','🧾','Order'],['kaha','💵','Kaha'],['carry','📦','Dala'],
                    ['tala','📓','Tala'],['more','⋯','Iba pa']]
@@ -978,6 +1002,138 @@ function render(){
   else html = viewMore();
   app.innerHTML = html;
   bind(); updateBar();
+}
+
+
+/* ============================================================
+   CAMERA SA LOOB NG APP + GPS
+   ============================================================
+   Hiling ni Matt: "gusto ko malaman what time sila nakapagbukas with picture
+   ... na hindi nila iuupload ang picture ... with picture and GPS".
+
+   WALANG FILE PICKER DITO. getUserMedia at canvas lang — kaya WALANG
+   paraan para magpasok ng lumang litrato mula sa gallery. Iyon ang buong
+   punto: ang litrato ay kinuha NGAYON, sa LUGAR na iyon.
+
+   Ang oras ay oras ng TELEPONO sa sandali ng pagkuha. Kapag walang signal,
+   naiipon ito at ipinapadala mamaya — pero ang oras ng PAGKUHA pa rin ang
+   opisyal. Sinusukat ng server ang agwat, at may tanda kung kahina-hinala.
+
+   Android Chrome lang ito — iyon naman ang branch app (doon din ang printer). */
+let camStream = null;
+let camTask   = null;    // {id, text} habang bukas ang camera
+let camBusy   = false;
+let camGps    = null;    // {lat,lng,acc} habang kinukuha
+
+function gpsNow(){
+  return new Promise(resolve=>{
+    if(!navigator.geolocation){ resolve({err:'Walang GPS sa telepono.'}); return; }
+    let best=null, id=null, done=false;
+    const finish=()=>{
+      if(done) return; done=true;
+      try{ if(id!=null) navigator.geolocation.clearWatch(id); }catch(e){}
+      resolve(best ? {lat:+best.coords.latitude.toFixed(6), lng:+best.coords.longitude.toFixed(6),
+                      acc:Math.round(best.coords.accuracy)}
+                   : {err:'Hindi makuha ang lokasyon.'});
+    };
+    try{
+      id=navigator.geolocation.watchPosition(
+        p=>{ if(!best || p.coords.accuracy<best.coords.accuracy) best=p;
+             if(best && best.coords.accuracy<=15) finish(); },
+        e=>{ if(!best && e && e.code===1){ done=true;
+               try{ if(id!=null) navigator.geolocation.clearWatch(id); }catch(_){}
+               resolve({err:'Hindi pinayagan ang Location. Buksan ito sa Settings.'}); } },
+        {enableHighAccuracy:true, maximumAge:0, timeout:20000});
+    }catch(e){ finish(); return; }
+    setTimeout(finish, 12000);
+  });
+}
+
+async function camOpen(taskId, text){
+  if(camBusy) return;
+  camBusy=true;
+  camTask={id:taskId, text:text}; camGps=null;
+  render();
+  // Simulan agad ang GPS — matagal ito, habang nakatutok pa lang siya.
+  gpsNow().then(g=>{ camGps=g; const el=document.getElementById('cam-gps');
+    if(el) el.innerHTML = g.err ? '⚠️ '+esc(g.err)
+      : '📍 Nakuha ang lokasyon (±'+g.acc+'m)'; });
+  try{
+    camStream = await navigator.mediaDevices.getUserMedia(
+      {video:{facingMode:{ideal:'environment'}, width:{ideal:1280}}, audio:false});
+  }catch(e){
+    camClose();
+    toast('Hindi mabuksan ang camera. I-allow ang Camera sa Settings.', 5000);
+    camBusy=false;
+    return;
+  }
+  // ANG PREVIEW AY HIWALAY NA USAPIN. Kung pumalya ito — tumanggi ang
+  // autoplay, o ayaw tumanggap ng srcObject — BUHAY pa rin ang camera at
+  // pwede pa ring kumuha. Dati, ang palyadong preview ay pumapatay ng buong
+  // pagkuha, at ang sabi sa staff ay "hindi mabuksan ang camera" kahit
+  // bukas naman.
+  try{
+    const v=document.getElementById('cam-video');
+    if(v){
+      try{ v.srcObject=camStream; }catch(e2){}
+      const pr=v.play();
+      if(pr && pr.catch) pr.catch(()=>{});
+    }
+  }catch(e){ /* walang preview; kaya pa ring kumuha */ }
+  camBusy=false;
+}
+function camClose(){
+  try{ if(camStream) camStream.getTracks().forEach(t=>t.stop()); }catch(e){}
+  camStream=null; camTask=null; camGps=null;
+  render();
+}
+async function camShoot(){
+  if(camBusy || !camTask) return;
+  const v=document.getElementById('cam-video');
+  if(!v || !v.videoWidth){ toast('Hintayin munang lumabas ang larawan.'); return; }
+  camBusy=true;
+  const kuha=new Date().toISOString();     // ORAS NG PAGKUHA — ito ang opisyal
+  try{
+    const maxW=1024;
+    const w=Math.min(v.videoWidth, maxW);
+    const h=Math.round(v.videoHeight * (w/v.videoWidth));
+    const c=document.createElement('canvas'); c.width=w; c.height=h;
+    c.getContext('2d').drawImage(v,0,0,w,h);
+    const b64=c.toDataURL('image/jpeg', 0.5);
+    const task=camTask.id, g=camGps||{};
+    camClose();
+    // Sa pila muna — doon ito ipapadala, kaya pareho ang daan kahit may
+    // signal o wala. Hindi nawawala ang litrato kahit mamatay ang app.
+    const naitabi = enqueue('taskphoto', {task_id:task, status:'done', reason:'',
+      photo_b64:b64, lat:(g.lat!=null?g.lat:null), lng:(g.lng!=null?g.lng:null),
+      acc:(g.acc!=null?g.acc:null), captured_at:kuha});
+    if(naitabi){
+      toast(navigator.onLine ? '📷 Kuha na. Ipinapadala…'
+                             : '📷 Kuha na. Ipapadala pagkaroon ng signal.', 4000);
+    }
+    render();
+    if(navigator.onLine) syncQueue(true).then(()=>loadTasks());
+  }catch(e){
+    camBusy=false;
+    toast('Hindi nakuha ang litrato. Subukan ulit.');
+    return;
+  }
+  camBusy=false;
+}
+function viewCamera(){
+  const g=camGps;
+  return `<div class="card">
+    <h2>📷 ${esc(camTask ? camTask.text : '')}</h2>
+    <p class="hint">Kunan ngayon mismo. <b>Walang gallery</b> — ang litratong ito
+      lang ang tatanggapin, at ang oras ng pagkuha ang itatala.</p>
+    <video id="cam-video" playsinline muted autoplay
+      style="width:100%;border-radius:10px;background:#000;max-height:60vh;object-fit:cover"></video>
+    <div class="hint" id="cam-gps" style="margin-top:6px">📍 Kinukuha ang lokasyon…</div>
+    <div class="sp"></div>
+    <button id="cam-shoot">📸 Kunan</button>
+    <div class="sp"></div>
+    <button class="ghost" id="cam-cancel">Huwag na</button>
+  </div>`;
 }
 
 /* ============================================================
@@ -1070,6 +1226,10 @@ function viewChecklist(which){
     <div class="line"><span>Nagawa</span><b>${done} / ${rows.length}</b></div>
     ${skip?`<div class="line"><span>Hindi nagawa (may dahilan)</span><b>${skip}</b></div>`:''}
     ${wala?`<div class="line"><span>Walang sagot pa</span><b>${wala}</b></div>`:''}
+    ${(()=>{ const q=queue.filter(x=>x.kind==='taskphoto').length;
+      return q?`<div class="note" style="margin-top:8px">📷 ${q} litrato ang hindi pa
+        naipapadala. Naitala na ang ORAS NG PAGKUHA — hindi mawawala. Ipapadala
+        pagkaroon ng signal.</div>`:''; })()}
     ${sent?`<div class="note ok" style="margin-top:8px">✓ Naisumite na ni ${esc(sent.by_name||'?')}
       ${sent.oras?'· '+esc(sent.oras):''} — ${sent.n_done}/${sent.n_task} ang nagawa.
       Pwede pa ring ituloy ang kulang; isumite ulit pagkatapos.</div>`:''}
@@ -1083,9 +1243,18 @@ function viewChecklist(which){
       ${r.status?`<div class="hint">${r.status==='done'?'Nagawa':'HINDI nagawa'} ni
         ${esc(r.done_by||'?')}${r.oras?' · '+esc(r.oras):''}
         ${r.status==='skip'&&r.reason?'<br>Dahilan: '+esc(r.reason):''}</div>`:''}
+      ${r.needs_photo?`<div class="hint" style="margin-top:4px">
+        📷 <b>Kailangan ng litrato at lokasyon.</b> Kunan ngayon mismo —
+        walang gallery. Ang oras ng pagkuha ang itatala.
+        ${r.may_litrato?'<br>✓ May litrato na'+(r.may_gps?' at lokasyon':' (walang GPS)')
+          +(r.huli_minuto>5?' · dumating '+r.huli_minuto+' minuto ang huli':''):''}
+      </div>`:''}
       <div class="row" style="margin-top:6px">
-        <button class="${r.status==='done'?'':'ghost'} sm" data-ckdone="${esc(r.id)}">
-          ${r.status==='done'?'✓ Nagawa':'Nagawa'}</button>
+        ${r.needs_photo
+          ? `<button class="${r.status==='done'?'ghost':''} sm" data-ckshoot="${esc(r.id)}">
+              ${r.status==='done'?'📷 Kunan ulit':'📷 Kunan'}</button>`
+          : `<button class="${r.status==='done'?'':'ghost'} sm" data-ckdone="${esc(r.id)}">
+              ${r.status==='done'?'✓ Nagawa':'Nagawa'}</button>`}
         <button class="${r.status==='skip'?'warn':'ghost'} sm" data-ckskip="${esc(r.id)}">
           ${r.status==='skip'?'⚠️ May dahilan':'Hindi nagawa'}</button>
         ${r.status?`<button class="ghost sm" data-ckclear="${esc(r.id)}">Alisin</button>`:''}
@@ -1579,6 +1748,15 @@ function bind(){
   };
   document.querySelectorAll('[data-ckdone]').forEach(b=>b.addEventListener('click',()=>
     ckSet(b.dataset.ckdone,'done')));
+  // KAILANGAN NG LITRATO: camera sa loob ng app, hindi tsek lang.
+  // Gumagana ito KAHIT WALANG SIGNAL — nasa pila ang litrato.
+  document.querySelectorAll('[data-ckshoot]').forEach(b=>b.addEventListener('click',()=>{
+    const id=b.dataset.ckshoot;
+    const r=(ckRows||[]).find(x=>x.id===id);
+    camOpen(id, r?r.text:'Litrato');
+  }));
+  on('cam-shoot',  camShoot);
+  on('cam-cancel', camClose);
   document.querySelectorAll('[data-ckclear]').forEach(b=>b.addEventListener('click',()=>
     ckSet(b.dataset.ckclear,'clear')));
   document.querySelectorAll('[data-ckskip]').forEach(b=>b.addEventListener('click',()=>{
