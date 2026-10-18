@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <meta name="theme-color" content="#1b3a2f">
 <title>Palaruan Branch</title>
-<!-- APP_VERSION_MARK: v2026.10.18-L227 -->
+<!-- APP_VERSION_MARK: v2026.10.18-L228 -->
 <!--
   PALARUAN BRANCH APP — isang file, lahat ng branch.
 
@@ -110,7 +110,7 @@ button.sm{padding:9px 10px;font-size:13px;width:auto}
    KONEKSYON — isang address lamang. Walang susi ng database dito.
    ============================================================ */
 const API = 'https://bipeeundccfcntgzwkkk.supabase.co/functions/v1/branch';
-const APP_VERSION = 'v2026.10.18-L227';
+const APP_VERSION = 'v2026.10.18-L228';
 
 const LS = {
   get(k, d){ try{ const v=localStorage.getItem('blv_'+k); return v==null?d:JSON.parse(v); }catch(e){ return d; } },
@@ -638,6 +638,46 @@ function viewPay(){
 /* ============================================================
    KAHA
    ============================================================ */
+/* ---- ANG BILANG PER DENOMINASYON ----
+   Hiling ni Matt: "pwede bang ang ilagay ay denomination din tulad ng sa main
+   app — 1000 x (kung ilang pcs) etc para di malilito ang staff?"
+
+   PAREHONG denominasyon ng main app (PH_DENOMS doon), pareho ang pagkakasunod.
+   Ang kabuuan ay KINAKALKULA — hindi na siya magbibilang sa isip, at hindi na
+   siya makakapagsulat ng bilang na hindi tumutugma sa mga pirasong hawak niya. */
+const PH_DENOMS=[1000,500,200,100,50,20,10,5,1,0.25];
+function khDenomGrid(){
+  return PH_DENOMS.map(dn=>{
+    const lbl = dn>=1 ? ('₱'+dn) : '25¢';
+    return `<div class="line" style="padding:3px 0;">
+      <span style="min-width:64px;">${lbl}</span>
+      <span style="opacity:.5;">×</span>
+      <input type="number" inputmode="numeric" min="0" placeholder="0"
+        data-denom="${dn}" style="max-width:110px; text-align:right; margin:0;">
+    </div>`;
+  }).join('')
+  +`<div class="line" style="font-weight:700; border-top:1px solid var(--line); padding-top:6px;">
+      <span>Kabuuan (auto)</span><span id="kh-denom-total">₱0.00</span></div>`;
+}
+function khDenomSum(){
+  let s=0;
+  document.querySelectorAll('[data-denom]').forEach(el=>{
+    s += (parseFloat(el.value)||0) * parseFloat(el.dataset.denom);
+  });
+  return Math.round(s*100)/100;
+}
+function khDenomBreakdown(){
+  const o={};
+  document.querySelectorAll('[data-denom]').forEach(el=>{
+    const q=parseFloat(el.value)||0; if(q>0) o[el.dataset.denom]=q;
+  });
+  return o;
+}
+function khDenomPaint(){
+  const el=document.getElementById('kh-denom-total');
+  if(el) el.textContent=peso(khDenomSum());
+}
+
 function viewKaha(){
   const st = dayState || {};
   const cash = st.cash || {};
@@ -677,13 +717,12 @@ function viewKaha(){
       : `<p class="hint">Bilangin ang LAHAT ng perang nasa kaha, kasama ang ACOH
            sa pagbukas. <b>HUWAG isama ang Petty Cash</b> — hiwalay na pera iyon.
            <b>Hindi ipapakita kung magkano ang inaasahan</b> — ang totoong nabilang
-           ang kailangan, hindi ang tamang sagot.</p>
-         <label>ACTUAL na Binilang</label>
-         <input id="kh-count" inputmode="decimal" placeholder="0">
-         <label>GCash Sales (kung meron)</label>
-         <input id="kh-gcash" inputmode="decimal" placeholder="0">
-         <label>Card Sales (kung meron)</label>
-         <input id="kh-card" inputmode="decimal" placeholder="0">
+           ang kailangan, hindi ang tamang sagot.
+           <br><b>CASH LAMANG ito.</b> Ang GCash at card ay naitala na ng POS kada
+           order — hindi mo na kailangang hanapin o isulat, at si Owner lang ang
+           makakapag-verify niyon.</p>
+         <label>ACTUAL na Binilang — ilang piraso kada denominasyon</label>
+         ${khDenomGrid()}
          <div class="sp"></div>
          <button id="kh-count-go">Isumite ang bilang</button>`}
   </div>
@@ -1827,14 +1866,22 @@ function bind(){
     toast('✓ Naitala ang Petty Cash.');
     await syncQueue(true); render();
   });
+  // Ang kabuuan ay nag-a-update habang nagta-type siya.
+  document.querySelectorAll('[data-denom]').forEach(el=>{
+    el.addEventListener('input', khDenomPaint);
+  });
+  khDenomPaint();
   on('kh-count-go', async()=>{
-    const c=Number((document.getElementById('kh-count').value||'').trim());
+    const hati=khDenomBreakdown();
+    const c=khDenomSum();
+    if(!Object.keys(hati).length){ toast('Walang nailagay na piraso.'); return; }
     if(!isFinite(c)||c<0){ toast('Hindi tamang halaga.'); return; }
-    const g=Number((document.getElementById('kh-gcash').value||'0'))||0;
-    const k=Number((document.getElementById('kh-card').value||'0'))||0;
     if(!confirm('Isumite ang bilang na '+peso(c)+'?\n\nHINDI NA ITO MABABAGO pagkatapos.')) return;
-    enqueue('cash', {business_date:businessDate(), counted_cash:c, counted_by:session.staff_name,
-                     gcash_total:g, card_total:k});
+    // WALA NANG GCASH AT CARD DITO (L227). Naitala na ng POS ang paraan ng
+    // bayad kada order — wala namang listahan si Queenie niyon, kaya ang
+    // pagpapatype sa kanya ay hula lang, at ang hula ay hindi patunay.
+    enqueue('cash', {business_date:businessDate(), counted_cash:c,
+                     counted_by:session.staff_name, counted_denoms:hati});
     toast('✓ Naisumite ang bilang.');
     await syncQueue(true); render();
   });
