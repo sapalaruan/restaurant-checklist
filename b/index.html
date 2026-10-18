@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <meta name="theme-color" content="#1b3a2f">
 <title>Palaruan Branch</title>
-<!-- APP_VERSION_MARK: v2026.10.17-L224 -->
+<!-- APP_VERSION_MARK: v2026.10.18-L225 -->
 <!--
   PALARUAN BRANCH APP — isang file, lahat ng branch.
 
@@ -110,7 +110,7 @@ button.sm{padding:9px 10px;font-size:13px;width:auto}
    KONEKSYON — isang address lamang. Walang susi ng database dito.
    ============================================================ */
 const API = 'https://bipeeundccfcntgzwkkk.supabase.co/functions/v1/branch';
-const APP_VERSION = 'v2026.10.17-L224';
+const APP_VERSION = 'v2026.10.18-L225';
 
 const LS = {
   get(k, d){ try{ const v=localStorage.getItem('blv_'+k); return v==null?d:JSON.parse(v); }catch(e){ return d; } },
@@ -127,6 +127,7 @@ let deviceId    = LS.get('device_id', null);
 let session     = LS.get('session', null);   // {token, store_id, staff_name, at}
 let menu        = LS.get('menu', null);      // huling menu — gumagana offline
 let dayState    = null;
+let shiftMe     = null;   // {in:{...}|null, out:{...}|null} — ngayong araw lang
 let route       = 'pos';
 let cart        = [];
 let queue       = LS.get('queue', []);       // mga hindi pa naipapadala
@@ -1027,7 +1028,11 @@ function render(){
     }
   }
   else html = viewMore();
-  app.innerHTML = html;
+  // ANG BABALA NG TIME IN — nasa ITAAS ng kahit anong tab, hindi nakatago
+  // sa "Iba pa". Hangga't hindi siya naka-time in, nakikita niya ito kahit
+  // saan siya pumunta. Kinukuha ang kalagayan isang beses kada pagpasok.
+  if(shiftMe===null && navigator.onLine) setTimeout(loadShiftMe,0);
+  app.innerHTML = viewShiftBar() + html;
   bind(); updateBar();
 }
 
@@ -1168,34 +1173,58 @@ function shiftEnqueue(kind, b64, lugar){
   const tok = (session && session.token) || null;
   const naitabi = enqueue('shift', Object.assign(
     {kind:kind, photo_b64: b64||null, __tok: tok}, lugar||{}));
-  if(kind==='out'){
-    // Ngayon lang pinapatay ang session — pagkatapos maitabi ang tala.
-    // Dala ng item ang sariling token nito, kaya kaya pa rin itong
-    // ipadala mamaya kahit wala nang nakapasok.
-    session=null; LS.del('session'); route='pos'; window.__whoTried=false;
-    toast(b64 ? (navigator.onLine ? '📷 Naitala ang paglabas. Ipinapadala…'
-                                  : '📷 Naitala ang paglabas. Ipapadala pagkaroon ng signal.')
-              : '⚠️ Naitala ang paglabas PERO WALANG LITRATO.', 5000);
-  } else if(naitabi){
-    toast(b64 ? (navigator.onLine ? '📷 Naitala ang pasok. Ipinapadala…'
-                                  : '📷 Naitala ang pasok. Ipapadala pagkaroon ng signal.')
-              : '⚠️ Naitala ang pasok PERO WALANG LITRATO.', 5000);
+  if(naitabi){
+    // Agad na ipinapakita ang bagong kalagayan, kahit hindi pa naipapadala.
+    // Kung hindi, aakalain niyang hindi tumalab ang pindutan at uulitin
+    // niya — at madodoble ang tala.
+    shiftMe = shiftMe || {};
+    shiftMe[kind] = {oras:(lugar&&lugar.captured_at)||new Date().toISOString(),
+                     may_litrato: !!b64, hinihintay: true};
+    const ano = kind==='in' ? 'TIME IN' : 'TIME OUT';
+    toast(b64 ? (navigator.onLine ? '📷 '+ano+' na. Ipinapadala…'
+                                  : '📷 '+ano+' na. Ipapadala pagkaroon ng signal.')
+              : '⚠️ '+ano+' na PERO WALANG LITRATO.', 5000);
   }
   render();
-  if(navigator.onLine) syncQueue(true);
+  if(navigator.onLine) syncQueue(true).then(()=>loadShiftMe());
 }
 async function shiftCapture(kind){
   camTask=null;
-  await camOpen('shift_'+kind, kind==='in' ? 'PASOK — kunan ang tindahan'
-                                           : 'LABAS — kunan ang tindahan', 'shift', kind);
-  // Hindi nabuksan ang camera: itala pa rin, may babala.
+  await camOpen('shift_'+kind, kind==='in' ? 'TIME IN — kunan ang tindahan'
+                                           : 'TIME OUT — kunan ang tindahan', 'shift', kind);
+  // PALYADONG CAMERA: itala pa rin, may babala. Kung hindi, hindi siya
+  // makaka-time in habang nakasara ang camera sa Settings — at hindi iyon
+  // dapat dahilan para hindi siya mabayaran.
   if(!camTask) shiftEnqueue(kind, null, {captured_at:new Date().toISOString()});
 }
-// Ang pagkansela ay HINDI pagtakas. Naitatala pa rin, walang litrato.
+// ANG PAGKANSELA AY PAG-URONG, HINDI PAGTAKAS.
+// Dati, ang kansela ay nagtatala pa rin nang walang litrato — tama iyon
+// noong nakakabit ito sa logout, dahil kailangang may tala kahit ano pa.
+// Ngayong sariling pindutan na ito, ang kansela ay "mamaya na lang":
+// WALANG itinatala, at mananatiling PULA ang babala hanggang mag-time in
+// siya. Hindi ito butas — ang hindi pag-time-in ay nakikita mo mismo.
 function camCancel(){
-  const layon=camTask&&camTask.purpose, k=camTask&&camTask.kind;
+  const layon=camTask&&camTask.purpose;
   camClose();
-  if(layon==='shift') shiftEnqueue(k, null, {captured_at:new Date().toISOString()});
+  if(layon==='shift') toast('Hindi pa naka-TIME IN. Pindutin ulit kapag handa na.', 4000);
+}
+
+/* ---- ANG KALAGAYAN NGAYONG ARAW ---- */
+async function loadShiftMe(){
+  if(!session) return;
+  const r = await call('shift_me', {});
+  if(r && r.ok){ shiftMe = {in:r.in||null, out:r.out||null}; }
+  else if(shiftMe===null){
+    // PALYADO ANG PAGTATANONG — walang signal, o luma pa ang server.
+    // Huwag itago ang TIME IN: kapag itinago, WALA siyang mapipindot at
+    // walang matatala kahit anong oras siya dumating. Mas mabuti ang
+    // "hindi pa naka-time in" kaysa sa walang pindutan. Kung naka-time in
+    // na pala siya, hindi madodoble: tinatanggihan ng server ang pangalawang
+    // TIME IN sa iisang araw — ibinabalik nito ang nauna, at walang bagong
+    // Telegram.
+    shiftMe = {in:null, out:null};
+  }
+  render();
 }
 
 function viewCamera(){
@@ -1477,8 +1506,56 @@ function viewLogbook(){
   </div>`;
 }
 
+/* ---- ANG BABALA NG TIME IN ----
+   Nasa itaas ng lahat ng tab. Ang TIME IN ay malaki at pula hangga't hindi
+   pa nagagawa; ang TIME OUT ay nasa "Iba pa" lang, hindi dito — para hindi
+   ito mapindot nang aksidente habang may pila ng customer. */
+function shiftOras(t){
+  if(!t) return '';
+  try{ return new Date(t).toLocaleTimeString('en-PH',
+    {timeZone:'Asia/Manila',hour:'numeric',minute:'2-digit'}); }
+  catch(e){ return ''; }
+}
+function viewShiftBar(){
+  if(!session || shiftMe===null) return '';          // hindi pa alam: tahimik
+  const pasok=shiftMe.in, labas=shiftMe.out;
+  if(!pasok){
+    return `<div class="card" style="border:2px solid #c0392b;">
+      <h2 style="color:#c0392b; margin-top:0;">⏰ HINDI KA PA NAKA-TIME IN</h2>
+      <p class="hint">Pindutin ito pagdating mo sa tindahan. Magpipicture ka,
+        at doon makikita ni Owner kung anong oras ka dumating. <b>Isang beses
+        lang ito sa buong araw</b> — hindi na ito hihingin sa tuwing bubuksan
+        mo ang app.</p>
+      <button id="sh-in" style="background:#c0392b;">📷 TIME IN</button>
+    </div>`;
+  }
+  if(!labas){
+    return `<div class="line" style="padding:7px 12px; background:rgba(22,160,133,.12);
+        border-bottom:1px solid var(--line);">
+      <span>✅ TIME IN <b>${shiftOras(pasok.oras)}</b>${pasok.hinihintay?' <span class="hint">(ipapadala pa)</span>':''}
+        ${pasok.may_litrato===false?' <span class="hint">⚠️ walang litrato</span>':''}</span>
+      <span class="hint">TIME OUT → Iba pa</span>
+    </div>`;
+  }
+  return `<div class="line" style="padding:7px 12px; border-bottom:1px solid var(--line);">
+    <span class="hint">TIME IN ${shiftOras(pasok.oras)} · TIME OUT ${shiftOras(labas.oras)}</span>
+  </div>`;
+}
+
 function viewMore(){
+  const pasok=shiftMe&&shiftMe.in, labas=shiftMe&&shiftMe.out;
   return `<div class="card">
+    <h2>⏰ Time in at time out</h2>
+    ${!pasok ? `<p class="hint">Hindi ka pa naka-time in ngayong araw.</p>
+        <button id="sh-in2" style="background:#c0392b;">📷 TIME IN</button>`
+      : labas ? `<div class="line"><span>Time in</span><b>${shiftOras(pasok.oras)}</b></div>
+        <div class="line"><span>Time out</span><b>${shiftOras(labas.oras)}</b></div>
+        <p class="hint">Tapos na ang shift mo ngayong araw.</p>`
+      : `<div class="line"><span>Time in</span><b>${shiftOras(pasok.oras)}</b></div>
+        <p class="hint">Pindutin ito kapag uuwi ka na. Magpipicture ka ulit.</p>
+        <button class="warn" id="sh-out">📷 TIME OUT</button>`}
+  </div>
+  <div class="card">
     <h2>Iba pa</h2>
     <div class="line"><span>Hindi pa naipapadala</span><b>${queue.length}</b></div>
     <div class="line"><span>Printer</span><span class="hint">${esc(LS.get('printer_name','wala pa'))}</span></div>
@@ -1558,9 +1635,11 @@ function bind(){
     pendingCarries=null; balikList=null; countList=null;
     loadCarry();
     render();
-    // ANG LITRATO NG PASOK — pagkatapos nang mabuksan ang app, hindi bago,
-    // para kahit tumanggi ang camera ay nakakapagbenta pa rin siya.
-    shiftCapture('in');
+    // WALANG LITRATO SA PAG-LOGIN (L225). Ang pagbukas ng app ay HINDI
+    // pagdating sa tindahan — pwedeng nasa bahay pa siya, o binuksan lang
+    // ulit ang app. Ang TIME IN ang may litrato, at iyon ay sariling
+    // pindutan. Kinukuha lang dito kung naka-time in na siya ngayong araw.
+    loadShiftMe();
   });
 
   // --- palit ng PIN ---
@@ -1838,6 +1917,11 @@ function bind(){
   }));
   on('cam-shoot',  camShoot);
   on('cam-cancel', camCancel);
+  // TIME IN / TIME OUT — tatlong pindutan, iisang daan.
+  on('sh-in',  ()=>shiftCapture('in'));
+  on('sh-in2', ()=>shiftCapture('in'));
+  on('sh-out', ()=>{ if(confirm('TIME OUT na?\n\nMagpipicture ka, at iyon ang '
+      +'oras ng pag-uwi mo.')) shiftCapture('out'); });
   document.querySelectorAll('[data-ckclear]').forEach(b=>b.addEventListener('click',()=>
     ckSet(b.dataset.ckclear,'clear')));
   document.querySelectorAll('[data-ckskip]').forEach(b=>b.addEventListener('click',()=>{
@@ -1936,11 +2020,14 @@ function bind(){
   });
   on('mr-out', ()=>{
     if(queue.length && !confirm(queue.length+' ang hindi pa naipapadala.\n\nMananatili ito sa teleponong ito. Mag-logout pa rin?')) return;
-    // ANG LITRATO NG PAGLABAS. Ang shiftEnqueue na ang pumapatay ng session
-    // — pagkatapos maitabi ang tala, hindi bago. Lahat ng daan (kuha,
-    // kansela, palyadong camera) ay humahantong sa logout; ang litrato lang
-    // ang pwedeng mawala, hindi ang tala.
-    shiftCapture('out');
+    // WALANG LITRATO SA LOGOUT (L225). Ang paglabas sa app ay hindi
+    // pag-uwi — madalas nga ay nag-lologout lang sila para magpalit ng tao.
+    // Ang TIME OUT ang may litrato, at sariling pindutan iyon.
+    if(shiftMe && shiftMe.in && !shiftMe.out
+       && !confirm('HINDI KA PA NAKA-TIME OUT.\n\nMag-logout pa rin?\n\n'
+                  +'Kung uuwi ka na, i-cancel mo ito at pindutin muna ang TIME OUT.')) return;
+    session=null; LS.del('session'); route='pos'; window.__whoTried=false;
+    shiftMe=null; render();
   });
 }
 
