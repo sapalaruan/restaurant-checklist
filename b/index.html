@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <meta name="theme-color" content="#1b3a2f">
 <title>Palaruan Branch</title>
-<!-- APP_VERSION_MARK: v2026.10.18-L225 -->
+<!-- APP_VERSION_MARK: v2026.10.18-L226 -->
 <!--
   PALARUAN BRANCH APP — isang file, lahat ng branch.
 
@@ -110,7 +110,7 @@ button.sm{padding:9px 10px;font-size:13px;width:auto}
    KONEKSYON — isang address lamang. Walang susi ng database dito.
    ============================================================ */
 const API = 'https://bipeeundccfcntgzwkkk.supabase.co/functions/v1/branch';
-const APP_VERSION = 'v2026.10.18-L225';
+const APP_VERSION = 'v2026.10.18-L226';
 
 const LS = {
   get(k, d){ try{ const v=localStorage.getItem('blv_'+k); return v==null?d:JSON.parse(v); }catch(e){ return d; } },
@@ -650,11 +650,20 @@ function viewKaha(){
       Hindi pa kasama sa bilang sa itaas.</div>`:''}
   </div>
   <div class="card">
-    <h2>Panimulang barya</h2>
+    <h2>Actual Cash On Hand (ACOH)</h2>
     ${cash.opening_float!=null
-      ? `<div class="line"><span>Naitala na</span><b>${peso(cash.opening_float)}</b></div>`
-      : `<label>Magkano ang dala mong panimula?</label>
+      ? `<div class="line"><span>ACOH sa pagbukas</span><b>${peso(cash.opening_float)}</b></div>
+         ${cash.petty!=null?`<div class="line"><span>Petty Cash (hiwalay)</span><b>${peso(cash.petty)}</b></div>`
+           :`<label>Petty Cash (hiwalay, hal. 2000)</label>
+             <input id="kh-petty" inputmode="decimal" placeholder="0">
+             <div class="sp"></div><button id="kh-petty-go">Itala ang Petty Cash</button>`}`
+      : `<p class="hint">Pareho ito ng tawag sa MAIN APP, para hindi ka malito:
+           ang <b>ACOH</b> ay ang perang NASA KAHA. Ang <b>Petty Cash</b> ay
+           HIWALAY — hindi ito kasama sa bibilangin mo sa dulo ng gabi.</p>
+         <label>ACOH — magkano ang perang nasa kaha?</label>
          <input id="kh-float" inputmode="decimal" placeholder="1500">
+         <label>Petty Cash (hiwalay, hal. 2000)</label>
+         <input id="kh-petty" inputmode="decimal" placeholder="0">
          <div class="sp"></div><button id="kh-float-go">Itala</button>`}
   </div>
   <div class="card">
@@ -665,14 +674,15 @@ function viewKaha(){
                <br>Kasama na ang GCash (${peso(cash.gcash_total||0)}) at card (${peso(cash.card_total||0)}). Tapos na ang gabing ito.</div>`
           : `<div class="note ok">✓ Naitala na ang bilang. Hindi na ito mababago —
                hinihintay ang verify ng Owner o Manager.</div>`)
-      : `<p class="hint">Bilangin ang LAHAT ng perang nasa kaha, kasama ang panimula.
+      : `<p class="hint">Bilangin ang LAHAT ng perang nasa kaha, kasama ang ACOH
+           sa pagbukas. <b>HUWAG isama ang Petty Cash</b> — hiwalay na pera iyon.
            <b>Hindi ipapakita kung magkano ang inaasahan</b> — ang totoong nabilang
            ang kailangan, hindi ang tamang sagot.</p>
-         <label>Kabuuang nabilang</label>
+         <label>ACTUAL na Binilang</label>
          <input id="kh-count" inputmode="decimal" placeholder="0">
-         <label>GCash ngayong gabi (kung meron)</label>
+         <label>GCash Sales (kung meron)</label>
          <input id="kh-gcash" inputmode="decimal" placeholder="0">
-         <label>Credit card ngayong gabi (kung meron)</label>
+         <label>Card Sales (kung meron)</label>
          <input id="kh-card" inputmode="decimal" placeholder="0">
          <div class="sp"></div>
          <button id="kh-count-go">Isumite ang bilang</button>`}
@@ -1778,8 +1788,25 @@ function bind(){
   on('kh-float-go', async()=>{
     const v=Number((document.getElementById('kh-float').value||'').trim());
     if(!isFinite(v)||v<0){ toast('Hindi tamang halaga.'); return; }
-    enqueue('cash', {business_date:businessDate(), opening_float:v, opened_by:session.staff_name});
-    toast('✓ Naitala ang panimula.');
+    const pEl=document.getElementById('kh-petty');
+    const praw=(pEl?pEl.value:'').trim();
+    const p = praw==='' ? null : Number(praw);
+    if(p!==null && (!isFinite(p)||p<0)){ toast('Hindi tamang Petty Cash.'); return; }
+    // ANG PETTY AY HIWALAY NA HANAY — hindi idinaragdag sa opening_float.
+    // Kung pinagsama, lalabas na sobra ang kaha kada araw.
+    const d={business_date:businessDate(), opening_float:v, opened_by:session.staff_name};
+    if(p!==null) d.petty=p;
+    enqueue('cash', d);
+    toast('✓ Naitala ang ACOH'+(p!==null?' at ang Petty Cash.':'.'));
+    await syncQueue(true); render();
+  });
+  on('kh-petty-go', async()=>{
+    const pEl=document.getElementById('kh-petty');
+    const praw=(pEl?pEl.value:'').trim();
+    const p = praw==='' ? NaN : Number(praw);
+    if(!isFinite(p)||p<0){ toast('Hindi tamang halaga.'); return; }
+    enqueue('cash', {business_date:businessDate(), petty:p});
+    toast('✓ Naitala ang Petty Cash.');
     await syncQueue(true); render();
   });
   on('kh-count-go', async()=>{
