@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <meta name="theme-color" content="#1b3a2f">
 <title>Palaruan Branch</title>
-<!-- APP_VERSION_MARK: v2026.10.18-L226 -->
+<!-- APP_VERSION_MARK: v2026.10.18-L227 -->
 <!--
   PALARUAN BRANCH APP — isang file, lahat ng branch.
 
@@ -110,7 +110,7 @@ button.sm{padding:9px 10px;font-size:13px;width:auto}
    KONEKSYON — isang address lamang. Walang susi ng database dito.
    ============================================================ */
 const API = 'https://bipeeundccfcntgzwkkk.supabase.co/functions/v1/branch';
-const APP_VERSION = 'v2026.10.18-L226';
+const APP_VERSION = 'v2026.10.18-L227';
 
 const LS = {
   get(k, d){ try{ const v=localStorage.getItem('blv_'+k); return v==null?d:JSON.parse(v); }catch(e){ return d; } },
@@ -1179,10 +1179,23 @@ async function camShoot(){
    ang nakasulat, at iyon ang lumalabas sa Telegram at sa dashboard ni Owner.
    Mas mabuti ang talang may butas kaysa sa staff na hindi makapagbenta — at
    mas mabuti ang nakikitang butas kaysa sa katahimikan. */
-function shiftEnqueue(kind, b64, lugar){
+function shiftEnqueue(kind, b64, lugar, dahil){
   const tok = (session && session.token) || null;
   const naitabi = enqueue('shift', Object.assign(
     {kind:kind, photo_b64: b64||null, __tok: tok}, lugar||{}));
+  if(naitabi && !b64 && dahil==='camera'){
+    // Isang mensahe lang, pero kumpleto: ang nangyari AT ang aayusin.
+    const ano = kind==='in' ? 'TIME IN' : 'TIME OUT';
+    toast('⚠️ Naitala ang '+ano+' PERO WALANG LITRATO — naka-BLOCK ang camera.'
+         +' Ayusin: pindutin ang 🔒 sa tabi ng address sa Chrome → Permissions'
+         +' → Camera → Allow, tapos i-refresh.', 12000);
+    shiftMe = shiftMe || {};
+    shiftMe[kind] = {oras:(lugar&&lugar.captured_at)||new Date().toISOString(),
+                     may_litrato:false, hinihintay:true};
+    render();
+    if(navigator.onLine) syncQueue(true).then(()=>loadShiftMe());
+    return;
+  }
   if(naitabi){
     // Agad na ipinapakita ang bagong kalagayan, kahit hindi pa naipapadala.
     // Kung hindi, aakalain niyang hindi tumalab ang pindutan at uulitin
@@ -1205,7 +1218,12 @@ async function shiftCapture(kind){
   // PALYADONG CAMERA: itala pa rin, may babala. Kung hindi, hindi siya
   // makaka-time in habang nakasara ang camera sa Settings — at hindi iyon
   // dapat dahilan para hindi siya mabayaran.
-  if(!camTask) shiftEnqueue(kind, null, {captured_at:new Date().toISOString()});
+  //
+  // SINASABI ANG DAHILAN. Dati, may dalawang mensaheng sunod-sunod: una ang
+  // "I-allow ang Camera sa Settings" mula sa camOpen, tapos agad itong
+  // natatabunan ng "walang litrato" — kaya nakikita ng staff ang BUNGA pero
+  // hindi ang DAHILAN, at hindi nila alam na may aayusin pala.
+  if(!camTask) shiftEnqueue(kind, null, {captured_at:new Date().toISOString()}, 'camera');
 }
 // ANG PAGKANSELA AY PAG-URONG, HINDI PAGTAKAS.
 // Dati, ang kansela ay nagtatala pa rin nang walang litrato — tama iyon
