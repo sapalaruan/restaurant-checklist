@@ -684,8 +684,12 @@ function viewKaha(){
   return `<div class="card">
     <h2>Ngayong gabi · ${businessDate()}</h2>
     <div class="line"><span>Order</span><b>${st.orders!=null?st.orders:'—'}</b></div>
-    <div class="line"><span>Benta</span><b>${st.gross!=null?peso(st.gross):'—'}</b></div>
+    ${cash.counted
+      ? `<div class="line"><span>Benta</span><b>${st.gross!=null?peso(st.gross):'—'}</b></div>`
+      : `<div class="line"><span>Benta</span><b>🔒</b></div>`}
     <div class="line"><span>Void</span><b>${st.voids!=null?st.voids:'—'}</b></div>
+    ${cash.counted?'':`<div class="hint" style="margin-top:6px;">🔒 Blind count — tulad ng MAIN APP:
+      makikita ang <b>Benta</b> PAGKATAPOS mong i-submit ang bilang sa dulo ng gabi.</div>`}
     ${queue.length?`<div class="note" style="margin-top:8px">⏳ ${queue.length} ang hindi pa naipapadala.
       Hindi pa kasama sa bilang sa itaas.</div>`:''}
   </div>
