@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <meta name="theme-color" content="#1b3a2f">
 <title>Palaruan Branch</title>
-<!-- APP_VERSION_MARK: v2026.10.28-L274 -->
+<!-- APP_VERSION_MARK: v2026.10.28-L275 -->
 <!--
   PALARUAN BRANCH APP — isang file, lahat ng branch.
 
@@ -110,7 +110,7 @@ button.sm{padding:9px 10px;font-size:13px;width:auto}
    KONEKSYON — isang address lamang. Walang susi ng database dito.
    ============================================================ */
 const API = 'https://bipeeundccfcntgzwkkk.supabase.co/functions/v1/branch';
-const APP_VERSION = 'v2026.10.28-L274';
+const APP_VERSION = 'v2026.10.28-L275';
 
 const LS = {
   get(k, d){ try{ const v=localStorage.getItem('blv_'+k); return v==null?d:JSON.parse(v); }catch(e){ return d; } },
@@ -639,7 +639,7 @@ function viewPay(){
    KAHA
    ============================================================ */
 /* ---- ANG BILANG PER DENOMINASYON ----
-   Hiling ni Matt: "pwede bang ang ilagay ay denomination din tulad ng sa main
+   Hiling Owner: "pwede bang ang ilagay ay denomination din tulad ng sa main
    app — 1000 x (kung ilang pcs) etc para di malilito ang staff?"
 
    PAREHONG denominasyon ng main app (PH_DENOMS doon), pareho ang pagkakasunod.
@@ -958,7 +958,7 @@ async function printStub(order){
   }
   const L = [];
   const push = a => a.forEach(b=>L.push(b));
-  // WALANG PANGALAN NG TINDAHAN SA ITAAS — hiniling ng Owner na tanggalin.
+  // WALANG PANGALAN NG TINDAHAN SA ITAAS — hiniling Owner na tanggalin.
   push(ESC.init); push(ESC.center);
   push(ESC.big);
   push(encLine(order.order_no));
@@ -1093,7 +1093,7 @@ function render(){
 /* ============================================================
    CAMERA SA LOOB NG APP + GPS
    ============================================================
-   Hiling ni Matt: "gusto ko malaman what time sila nakapagbukas with picture
+   Hiling Owner: "gusto ko malaman what time sila nakapagbukas with picture
    ... na hindi nila iuupload ang picture ... with picture and GPS".
 
    WALANG FILE PICKER DITO. getUserMedia at canvas lang — kaya WALANG
@@ -1317,7 +1317,7 @@ function viewCamera(){
 /* ============================================================
    TALA — ANG LOGBOOK NG SHIFT
    ============================================================
-   Hiling ni Matt: "may pwedeng ilagay ang current shift or irecord - then
+   Hiling Owner: "may pwedeng ilagay ang current shift or irecord - then
    mababasa ng next shift. Tsaka nakalagay lahat ng records sa isang tab para
    may record sila. Halimbawa, may sulat na natanggap today."
 
@@ -1325,7 +1325,7 @@ function viewCamera(){
      1. TALA — nangyari ito, may record kami.
      2. ABOT — para sa susunod na shift, at may bakas kung NABASA na nila.
 
-   WALANG DELETE. Tuntunin ni Matt: hindi mabubura ang audit trail ng kahit
+   WALANG DELETE. Tuntunin ng Owner: hindi mabubura ang audit trail ng kahit
    sino maliban sa kanya. Kaya pagkasave, nakasulat na — ang pwede lang ay
    ipawalang-bisa ni Owner sa MAIN APP, at nananatili ang orihinal.
 
@@ -2158,7 +2158,7 @@ async function loadMenu(){
 
 // L270 — PER-BRANCH NA ANG PREFIX.
 //
-// Nakita ni Matt: ang resibo ng Polangyuta ay BLV-41-000001 — mukhang
+// Nakita ng Owner: ang resibo ng Polangyuta ay BLV-41-000001 — mukhang
 // Boulevard. Naka-hardcode ang 'BLV-' dito, kaya magkamukha ang resibo
 // ng LAHAT ng branch. Hindi mo masasabi sa papel kung saan galing.
 //
