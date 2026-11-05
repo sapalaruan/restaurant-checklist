@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <meta name="theme-color" content="#1b3a2f">
 <title>Palaruan Branch</title>
-<!-- APP_VERSION_MARK: v2026.11.05-L290 -->
+<!-- APP_VERSION_MARK: v2026.11.05-L291 -->
 <!--
   PALARUAN BRANCH APP — isang file, lahat ng branch.
 
@@ -110,7 +110,7 @@ button.sm{padding:9px 10px;font-size:13px;width:auto}
    KONEKSYON — isang address lamang. Walang susi ng database dito.
    ============================================================ */
 const API = 'https://bipeeundccfcntgzwkkk.supabase.co/functions/v1/branch';
-const APP_VERSION = 'v2026.11.05-L290';
+const APP_VERSION = 'v2026.11.05-L291';
 
 const LS = {
   get(k, d){ try{ const v=localStorage.getItem('blv_'+k); return v==null?d:JSON.parse(v); }catch(e){ return d; } },
@@ -149,6 +149,50 @@ const GASTOS_CATS = [
   ['kumpuni', 'KUMPUNI'],
   ['iba',     'IBA PA']
 ];
+// L291 — ANG BANTAY SA PINIGIL NA DIALOG. Pareho ng nasa main app.
+// 13 ang confirm() dito. Kapag pinigil ng browser, `false` ang
+// isinasauli AGAD at tahimik na walang nangyayari — ganito nawala ang
+// upload at ang Tanggapin sa main app ng May-ari, apat na beses.
+// Walang taong makakabasa at makakapindot sa loob ng 30ms.
+let dialogPinigil=false;
+const _diaConfirm = window.confirm, _diaPrompt = window.prompt;
+function dialogPinigilBabala(){
+  if(dialogPinigil) return;
+  dialogPinigil=true;
+  try{
+    let b=document.getElementById('dialog-patay');
+    if(!b){
+      b=document.createElement('div');
+      b.id='dialog-patay';
+      b.style.cssText='position:fixed; left:0; right:0; bottom:0; z-index:99999;'
+        +'background:#7f1d1d; color:#fff; padding:12px 14px; font-size:13px;'
+        +'line-height:1.45;';
+      document.body.appendChild(b);
+    }
+    b.innerHTML='<b>⚠️ PINIPIGILAN NG BROWSER ANG MGA TANONG.</b>'
+      +'<div style="margin-top:5px;">Kapag ganito, <b>WALANG TUMUTULOY</b> kapag '
+      +'pumipindot ka. I-refresh ang app.</div>'
+      +'<div style="margin-top:8px;"><button id="dialog-patay-reload" '
+      +'style="padding:7px 12px; font-weight:700; border:0; border-radius:6px;'
+      +'background:#fff; color:#7f1d1d;">I-refresh</button></div>';
+    const rb=document.getElementById('dialog-patay-reload');
+    if(rb) rb.addEventListener('click',()=>{ try{ location.reload(); }catch(e){} });
+  }catch(e){}
+}
+window.confirm=function(m){
+  const t0=Date.now();
+  let r=false;
+  try{ r=_diaConfirm.call(window,m); }catch(e){ r=false; }
+  if(r===false && (Date.now()-t0)<30) dialogPinigilBabala();
+  return r;
+};
+window.prompt=function(m,d){
+  const t0=Date.now();
+  let r=null;
+  try{ r=_diaPrompt.call(window,m,d); }catch(e){ r=null; }
+  if(r===null && (Date.now()-t0)<30) dialogPinigilBabala();
+  return r;
+};
 let dayState    = null;
 let shiftMe     = null;   // {in:{...}|null, out:{...}|null} — ngayong araw lang
 let route       = 'pos';
