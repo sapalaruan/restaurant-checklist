@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <meta name="theme-color" content="#1b3a2f">
 <title>Palaruan Branch</title>
-<!-- APP_VERSION_MARK: v2026.11.05-L289 -->
+<!-- APP_VERSION_MARK: v2026.11.05-L290 -->
 <!--
   PALARUAN BRANCH APP — isang file, lahat ng branch.
 
@@ -110,7 +110,7 @@ button.sm{padding:9px 10px;font-size:13px;width:auto}
    KONEKSYON — isang address lamang. Walang susi ng database dito.
    ============================================================ */
 const API = 'https://bipeeundccfcntgzwkkk.supabase.co/functions/v1/branch';
-const APP_VERSION = 'v2026.11.05-L289';
+const APP_VERSION = 'v2026.11.05-L290';
 
 const LS = {
   get(k, d){ try{ const v=localStorage.getItem('blv_'+k); return v==null?d:JSON.parse(v); }catch(e){ return d; } },
@@ -126,6 +126,29 @@ let deviceToken = LS.get('device_token', null);
 let deviceId    = LS.get('device_id', null);
 let session     = LS.get('session', null);   // {token, store_id, staff_name, at}
 let menu        = LS.get('menu', null);      // huling menu — gumagana offline
+// L290 — ANG KATEGORYA NG GASTOS.
+//
+// Nireport ng May-ari: "hindi ko din makita kung nilagay ni queenie ito
+// under wages or sahod, supplies or other expenses."
+//
+// Ang sagot: WALANG tinatanong. Tatlo lang ang field — Uri, Para saan,
+// Magkano. Ang "Sahod(Q)" ay sinulat sa Para saan, malayang teksto. May
+// hanay na `category` sa database, blangko lahat.
+//
+// KOPYA ITO NG NASA SERVER (branch_expense_cats). Kailangan ng kopya
+// dahil OFFLINE ang app na ito — nagpipila ng gastos kapag walang
+// signal, at wala siyang mahihingian ng listahan sa ganoong sandali.
+// May test na naghahambing sa dalawang listahan: kapag naglayo, bagsak.
+const GASTOS_CATS = [
+  ['sahod',   'SAHOD / WAGES'],
+  ['pagkain', 'PAGKAIN at SANGKAP'],
+  ['gamit',   'GAMIT at PANLINIS'],
+  ['utilidad','KURYENTE / TUBIG / LOAD'],
+  ['pwesto',  'PWESTO at PERMIT'],
+  ['padala',  'PADALA at SAKAY'],
+  ['kumpuni', 'KUMPUNI'],
+  ['iba',     'IBA PA']
+];
 let dayState    = null;
 let shiftMe     = null;   // {in:{...}|null, out:{...}|null} — ngayong araw lang
 let route       = 'pos';
@@ -764,6 +787,13 @@ function viewCashItems(){
       <option value="expense">Gastos (may lumabas na pera)</option>
       <option value="cash_in">Dagdag na cash (may pumasok na pera)</option>
     </select>
+    <div id="ci-cat-wrap">
+      <label>Anong uri ng gastos</label>
+      <select id="ci-cat">
+        <option value="">— pumili —</option>
+        ${GASTOS_CATS.map(c=>`<option value="${c[0]}">${esc(c[1])}</option>`).join('')}
+      </select>
+    </div>
     <label>Para saan</label>
     <input id="ci-desc" placeholder="hal. yelo, load, panukli" autocomplete="off">
     <div id="ci-vendor-wrap">
@@ -783,10 +813,14 @@ function viewCashItems(){
     <button id="ci-go">Itala</button>
     ${pend?`<div class="note" style="margin-top:8px">⏳ ${pend} ang hindi pa naipapadala.</div>`:''}
     ${items.length?`<div style="margin-top:10px">
-      ${items.map(i=>`<div class="line" style="align-items:flex-start">
+      ${items.map(i=>{
+        const lbl=(GASTOS_CATS.find(c=>c[0]===i.category)||[])[1];
+        return `<div class="line" style="align-items:flex-start">
         <span>${i.kind==='expense'?'➖':'➕'} ${esc(i.description)}
+          ${i.kind==='expense'?`<br><span class="hint">${lbl?esc(lbl)
+            :'<b>walang uri</b> — lumang pagtatala'}</span>`:''}
           <br><span class="hint">${esc(i.by_name||'')} · ${esc(i.oras||'')} ${stLbl(i.status)}</span></span>
-        <b>${peso(i.amount)}</b></div>`).join('')}
+        <b>${peso(i.amount)}</b></div>`;}).join('')}
     </div>`:'<p class="hint" style="margin-top:8px">Wala pang naitala ngayong gabi.</p>'}
   </div>`;
 }
@@ -1743,6 +1777,9 @@ function bind(){
     const s=document.getElementById('ci-source-wrap');
     if(v) v.style.display = isExp ? 'block' : 'none';
     if(s) s.style.display = isExp ? 'block' : 'none';
+    // Walang uri ng GASTOS ang pumasok na pera.
+    const c=document.getElementById('ci-cat-wrap');
+    if(c) c.style.display = isExp ? 'block' : 'none';
   };
   if(ciKind){ ciKind.addEventListener('change', ciToggle); ciToggle(); }
   on('ci-go', async()=>{
@@ -1751,14 +1788,33 @@ function bind(){
     const vend=((document.getElementById('ci-vendor')||{}).value||'').trim();
     const amt =Number(((document.getElementById('ci-amount')||{}).value||'').trim());
     const src =(document.getElementById('ci-source')||{}).value||'drawer';
+    const cat =((document.getElementById('ci-cat')||{}).value||'').trim();
     if(desc.length<2){ toast('Ilagay kung para saan.'); return; }
     if(!isFinite(amt) || amt<=0){ toast('Ilagay ang halaga.'); return; }
-    if(!confirm((kind==='expense'?'Gastos':'Dagdag na cash')+' na '+peso(amt)+' para sa "'+desc+'"?'
-       +(kind==='expense'?'\n\nHindi muna ito babawas sa kaha hangga\'t hindi inaaprubahan ni Owner.':''))) return;
+    if(kind==='expense' && !cat){ toast('Pumili ng uri ng gastos.'); return; }
+    // L290 — INALIS ANG confirm().
+    //
+    // DALAWANG SIRA SA ISANG LINYA:
+    //
+    // 1. PINIPIGILAN ITO NG BROWSER. Kapag pinigil, `false` ang
+    //    isinasauli at umaalis agad — HINDI MAKAKAPAGTALA NG GASTOS si
+    //    Queenie, at walang error. Ito ang EKSAKTONG pamilya ng sira
+    //    na pumatay sa upload ng menu sa main app: dalawa o higit pang
+    //    upload ang nawala nang tahimik sa loob ng 55 minuto.
+    //
+    // 2. KASINUNGALINGAN ANG TEKSTO: "Hindi muna ito babawas sa kaha
+    //    hangga't hindi inaaprubahan ni Owner." BAWAS NA AGAD mula pa
+    //    noong L279. Ikatlong kopya na ito ng parehong kasinungalingan
+    //    sa app — inayos na ang dalawa sa L287.
+    //
+    // Walang iniingatan ang confirm na ito: NAIPIPILA ang gastos at
+    // hindi nawawala, at ang Owner ang nagdedesisyon. Harang lang siya.
     enqueue('item', { id:'ci_'+uid(), kind, description:desc, vendor:vend||null,
-      amount:amt, source:src, by_name:(session&&session.staff_name)||null,
+      amount:amt, source:src, category:(kind==='expense'?cat:null),
+      by_name:(session&&session.staff_name)||null,
       business_date:businessDate(), at_ts:new Date().toISOString() });
     ['ci-desc','ci-vendor','ci-amount'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
+    const ce=document.getElementById('ci-cat'); if(ce) ce.value='';
     toast(kind==='expense' ? '✓ Naitala. Hintay sa approval ni Owner.' : '✓ Naitala.');
     syncQueue(true);
     render();
